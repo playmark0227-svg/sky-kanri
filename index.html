@@ -1,0 +1,2496 @@
+<!DOCTYPE html>
+<html lang="ja" class="">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jooto Clone - タスク・プロジェクト管理ツール</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { fontFamily: { sans: ['"Hiragino Kaku Gothic ProN"','"Yu Gothic"','Meiryo','sans-serif'] } } }
+  };
+</script>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  html, body, #root { height: 100%; }
+  body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif; }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.4); border-radius: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .drag-over { outline: 2px dashed #3b82f6; outline-offset: -2px; background: rgba(59,130,246,0.05); }
+  .card-dragging { opacity: 0.4; }
+  .gantt-bar { transition: all 0.15s; }
+  .gantt-bar:hover { filter: brightness(1.1); }
+  .markdown h1 { font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0; }
+  .markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
+  .markdown h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4rem 0; }
+  .markdown ul { list-style: disc; padding-left: 1.5rem; margin: 0.4rem 0; }
+  .markdown ol { list-style: decimal; padding-left: 1.5rem; margin: 0.4rem 0; }
+  .markdown p { margin: 0.4rem 0; }
+  .markdown code { background: rgba(120,120,120,0.2); padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em; }
+  .markdown pre { background: rgba(120,120,120,0.15); padding: 0.7rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0; }
+  .markdown a { color: #3b82f6; text-decoration: underline; }
+  .markdown blockquote { border-left: 3px solid #9ca3af; padding-left: 0.7rem; color: #6b7280; margin: 0.4rem 0; }
+  .label-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .toast { animation: slideIn 0.2s ease-out; }
+  @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-backdrop { animation: fadeIn 0.15s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-content { animation: scaleIn 0.15s ease-out; }
+  @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .priority-high { background: linear-gradient(90deg, #ef4444, #dc2626); }
+  .selected-card { box-shadow: 0 0 0 2px #3b82f6; }
+</style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+<div id="root"></div>
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useReducer, useCallback, useMemo, useRef, createContext, useContext, Fragment } = React;
+
+/* =========================================
+ * Constants
+ * ========================================= */
+const STATUSES = [
+  { id: 'not_started', label: '未着手', color: 'bg-gray-400', text: 'text-gray-700', dot: 'bg-gray-400' },
+  { id: 'in_progress', label: '進行中', color: 'bg-blue-500', text: 'text-blue-700', dot: 'bg-blue-500' },
+  { id: 'completed',   label: '完了',   color: 'bg-green-500',text: 'text-green-700', dot: 'bg-green-500' },
+  { id: 'on_hold',     label: '保留',   color: 'bg-yellow-500',text:'text-yellow-700',dot: 'bg-yellow-500' },
+  { id: 'cancelled',   label: '中止',   color: 'bg-red-500',  text: 'text-red-700',  dot: 'bg-red-500' },
+];
+const ORG_ROLES = [
+  { id: 'admin', label: '管理者' },
+  { id: 'account_admin', label: 'アカウント管理者' },
+  { id: 'staff', label: 'スタッフ' },
+  { id: 'guest', label: 'ゲスト' },
+  { id: 'viewer', label: '閲覧者' },
+];
+const PROJECT_ROLES = [
+  { id: 'pm', label: 'プロジェクトマネージャー' },
+  { id: 'member', label: 'メンバー' },
+  { id: 'submember', label: 'サブメンバー' },
+  { id: 'viewer', label: '閲覧者' },
+];
+const LABEL_COLORS = [
+  { id: 'red',    bg: 'bg-red-500',    light: 'bg-red-100 text-red-800' },
+  { id: 'orange', bg: 'bg-orange-500', light: 'bg-orange-100 text-orange-800' },
+  { id: 'yellow', bg: 'bg-yellow-500', light: 'bg-yellow-100 text-yellow-800' },
+  { id: 'green',  bg: 'bg-green-500',  light: 'bg-green-100 text-green-800' },
+  { id: 'teal',   bg: 'bg-teal-500',   light: 'bg-teal-100 text-teal-800' },
+  { id: 'blue',   bg: 'bg-blue-500',   light: 'bg-blue-100 text-blue-800' },
+  { id: 'indigo', bg: 'bg-indigo-500', light: 'bg-indigo-100 text-indigo-800' },
+  { id: 'purple', bg: 'bg-purple-500', light: 'bg-purple-100 text-purple-800' },
+  { id: 'pink',   bg: 'bg-pink-500',   light: 'bg-pink-100 text-pink-800' },
+  { id: 'gray',   bg: 'bg-gray-500',   light: 'bg-gray-200 text-gray-800' },
+];
+const PROJECT_ICONS = ['📋','📁','💼','🚀','🎯','📊','💡','🛠','🎨','📱','🌐','🏢','📚','✨','🔥','⚡','🎉','🌟','🎁','🍀'];
+const PROJECT_COLORS = ['blue','green','red','yellow','purple','pink','indigo','teal','orange','gray'];
+const AVATAR_EMOJIS = ['👤','🧑','👩','👨','🧑‍💻','👩‍💻','👨‍💻','🧑‍🎨','👩‍🎨','👨‍🎨','🧑‍🚀','👩‍🚀','🦊','🐱','🐶','🐼','🐻','🐯','🦁','🐰'];
+
+/* JP holidays — minimal sample list (2025-2027 主な祝日) */
+const JP_HOLIDAYS = new Set([
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06','2025-07-21','2025-08-11','2025-09-15','2025-09-23','2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23',
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23',
+]);
+
+/* =========================================
+ * Helpers
+ * ========================================= */
+const uid = (prefix='id') => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
+const today = () => new Date().toISOString().split('T')[0];
+const fmtDate = (s) => s ? s.replace(/-/g,'/') : '';
+const fmtDateTime = (ts) => {
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const daysBetween = (a, b) => {
+  const da = new Date(a); const db = new Date(b);
+  return Math.round((db - da) / (1000*60*60*24));
+};
+const addDays = (s, n) => {
+  const d = new Date(s); d.setDate(d.getDate()+n);
+  return d.toISOString().split('T')[0];
+};
+const isPastDate = (s) => s && new Date(s) < new Date(today());
+const isTodayDate = (s) => s === today();
+const isTomorrow = (s) => s === addDays(today(),1);
+const isWithinDays = (s, n) => {
+  if (!s) return false;
+  const diff = daysBetween(today(), s);
+  return diff >= 0 && diff <= n;
+};
+const labelById = (proj, id) => proj?.labels.find(l => l.id === id);
+const userById = (org, id) => org?.members.find(m => m.id === id);
+const colorObj = (id) => LABEL_COLORS.find(c => c.id === id) || LABEL_COLORS[9];
+const statusObj = (id) => STATUSES.find(s => s.id === id) || STATUSES[0];
+
+/* =========================================
+ * Persistence
+ * ========================================= */
+const STORAGE_KEY = 'jooto_clone_state_v1';
+const loadState = () => {
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch (e) { console.warn(e); return null; }
+};
+const saveState = (s) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { console.warn(e); }
+};
+
+/* =========================================
+ * Initial Sample Data
+ * ========================================= */
+function seedData() {
+  const userId = 'u_me';
+  const orgId = 'o_main';
+  const projId = 'p_demo';
+  const projId2 = 'p_marketing';
+  const ts = Date.now();
+  return {
+    currentUserId: userId,
+    currentOrgId: orgId,
+    selectedProjectId: projId,
+    view: 'dashboard',
+    darkMode: false,
+    sidebarOpen: true,
+    nextTaskNumber: 12,
+    organizations: [
+      {
+        id: orgId, name: 'マイ組織', icon: '🏢',
+        members: [
+          { id: userId, name: '自分', email: 'me@example.com', role: 'admin', avatar: '👤' },
+          { id: 'u_tanaka', name: '田中太郎', email: 'tanaka@example.com', role: 'staff', avatar: '🧑' },
+          { id: 'u_suzuki', name: '鈴木花子', email: 'suzuki@example.com', role: 'staff', avatar: '👩' },
+          { id: 'u_sato', name: '佐藤次郎', email: 'sato@example.com', role: 'staff', avatar: '🧑‍💻' },
+          { id: 'u_guest', name: '外部パートナー', email: 'guest@partner.com', role: 'guest', avatar: '🦊' },
+        ],
+        holidays: { weeklyOff: [0,6], jpHolidays: true, customHolidays: [] },
+        announcements: [
+          { id: 'a1', title: '🎉 ようこそ！', body: 'これは Jooto を参考にしたタスク・プロジェクト管理ツールです。サイドバーから機能をお試しください。', createdBy: userId, createdAt: ts },
+          { id: 'a2', title: '今週のリリース', body: '**ステータス自動変更機能**と**休日設定**機能をリリースしました。設定画面から有効化できます。', createdBy: userId, createdAt: ts - 86400000 },
+        ],
+        bookmarks: [
+          { id: 'b1', title: '会社ポータル', url: 'https://example.com' },
+          { id: 'b2', title: 'デザインガイド', url: 'https://example.com/design' },
+          { id: 'b3', title: 'API Docs', url: 'https://example.com/api' },
+        ],
+      }
+    ],
+    projects: [
+      {
+        id: projId, orgId, name: 'サンプルプロジェクト', icon: '🚀', color: 'blue',
+        archived: false, createdAt: ts, favorite: true,
+        lists: [
+          { id: 'l1', name: '未着手',   autoStatus: 'not_started', order: 0 },
+          { id: 'l2', name: '進行中',   autoStatus: 'in_progress', order: 1 },
+          { id: 'l3', name: '確認待ち', autoStatus: 'on_hold',     order: 2 },
+          { id: 'l4', name: '完了',     autoStatus: 'completed',   order: 3 },
+        ],
+        labels: [
+          { id: 'lb1', name: '優先度:高', color: 'red' },
+          { id: 'lb2', name: '優先度:中', color: 'yellow' },
+          { id: 'lb3', name: '優先度:低', color: 'green' },
+          { id: 'lb4', name: 'バグ',      color: 'pink' },
+          { id: 'lb5', name: '改善',      color: 'blue' },
+          { id: 'lb6', name: 'デザイン',  color: 'purple' },
+          { id: 'lb7', name: '開発',      color: 'indigo' },
+          { id: 'lb8', name: 'リリース',  color: 'teal' },
+        ],
+        members: [
+          { userId: 'u_me', role: 'pm' },
+          { userId: 'u_tanaka', role: 'member' },
+          { userId: 'u_suzuki', role: 'member' },
+          { userId: 'u_sato', role: 'submember' },
+        ],
+      },
+      {
+        id: projId2, orgId, name: 'マーケティング Q2', icon: '📊', color: 'green',
+        archived: false, createdAt: ts, favorite: false,
+        lists: [
+          { id: 'ml1', name: 'バックログ', autoStatus: 'not_started', order: 0 },
+          { id: 'ml2', name: '実行中',     autoStatus: 'in_progress', order: 1 },
+          { id: 'ml3', name: '完了',       autoStatus: 'completed',   order: 2 },
+        ],
+        labels: [
+          { id: 'mlb1', name: 'SNS', color: 'blue' },
+          { id: 'mlb2', name: '広告', color: 'orange' },
+          { id: 'mlb3', name: 'PR',   color: 'green' },
+        ],
+        members: [
+          { userId: 'u_me', role: 'pm' },
+          { userId: 'u_suzuki', role: 'member' },
+        ],
+      },
+    ],
+    tasks: [
+      mkTask({ id:'t1', projectId:projId, listId:'l1', taskNumber:1, title:'デザイン案を3パターン作成',
+        description:'## 概要\nLPのデザイン案を**3パターン**作成する。\n- ターゲット: 30代女性\n- カラー: ブルー基調',
+        assignees:['u_suzuki'], startDate: today(), dueDate: addDays(today(),5), labels:['lb1','lb6'], status:'not_started',
+        checklist:[
+          { id:'c1', text:'ワイヤーフレーム', done:true, assignees:['u_suzuki'], dueDate:null, startDate:null },
+          { id:'c2', text:'カラースキーム決定', done:false, assignees:[], dueDate:null, startDate:null },
+          { id:'c3', text:'プロトタイプ作成', done:false, assignees:[], dueDate:null, startDate:null },
+        ], followers:['u_me'], comments:[
+          { id:'cm1', userId:'u_me', text:'@鈴木花子 よろしくお願いします！', createdAt: ts-3600000 },
+          { id:'cm2', userId:'u_suzuki', text:'承知しました。3日以内に初稿提出します。', createdAt: ts-1800000 },
+        ], order:0 }),
+      mkTask({ id:'t2', projectId:projId, listId:'l2', taskNumber:2, title:'API設計とドキュメント作成',
+        description:'REST API のエンドポイントを設計し、OpenAPI Spec を書く。',
+        assignees:['u_tanaka'], startDate: addDays(today(),-2), dueDate: addDays(today(),3), labels:['lb2','lb7'], status:'in_progress', followers:[], order:0,
+        checklist:[
+          { id:'c4', text:'エンドポイント一覧', done:true },
+          { id:'c5', text:'認証フロー定義', done:true },
+          { id:'c6', text:'OpenAPI Spec 記述', done:false },
+        ] }),
+      mkTask({ id:'t3', projectId:projId, listId:'l2', taskNumber:3, title:'DB スキーマ設計',
+        description:'タスク管理用のテーブル設計を行う', assignees:['u_sato'], startDate: today(), dueDate: addDays(today(),1),
+        labels:['lb1','lb7'], status:'in_progress', order:1 }),
+      mkTask({ id:'t4', projectId:projId, listId:'l3', taskNumber:4, title:'マーケ部のレビュー待ち',
+        description:'デザイン案をマーケ部に共有しレビュー待ち', assignees:['u_me'], startDate: addDays(today(),-3), dueDate: addDays(today(),-1),
+        labels:['lb2'], status:'on_hold', order:0 }),
+      mkTask({ id:'t5', projectId:projId, listId:'l4', taskNumber:5, title:'要件定義書を完成',
+        description:'プロジェクトの要件定義書をまとめた', assignees:['u_me','u_tanaka'], startDate: addDays(today(),-10), dueDate: addDays(today(),-5),
+        labels:['lb3','lb8'], status:'completed', order:0 }),
+      mkTask({ id:'t6', projectId:projId, listId:'l1', taskNumber:6, title:'リリース告知ブログ準備',
+        description:'リリース時のブログ記事を準備', assignees:['u_suzuki'], startDate: addDays(today(),3), dueDate: addDays(today(),8),
+        labels:['lb3','lb8'], status:'not_started', order:1 }),
+      mkTask({ id:'t7', projectId:projId, listId:'l1', taskNumber:7, title:'バグ: ログイン後のリダイレクト不正',
+        description:'## 再現手順\n1. ログイン\n2. /home にリダイレクトされない', assignees:['u_tanaka'], startDate: today(), dueDate: today(),
+        labels:['lb1','lb4'], status:'not_started', order:2 }),
+      mkTask({ id:'t8', projectId:projId2, listId:'ml1', taskNumber:8, title:'Twitterキャンペーン設計',
+        description:'Q2のTwitterキャンペーンを設計', assignees:['u_suzuki'], startDate: today(), dueDate: addDays(today(),7),
+        labels:['mlb1'], status:'not_started', order:0 }),
+      mkTask({ id:'t9', projectId:projId2, listId:'ml2', taskNumber:9, title:'Google広告 入稿',
+        description:'検索広告とディスプレイ広告を入稿', assignees:['u_me'], startDate: addDays(today(),-1), dueDate: addDays(today(),2),
+        labels:['mlb2'], status:'in_progress', order:0 }),
+      mkTask({ id:'t10', projectId:projId2, listId:'ml3', taskNumber:10, title:'プレスリリース配信',
+        description:'PR TIMES 経由で配信完了', assignees:['u_me'], startDate: addDays(today(),-7), dueDate: addDays(today(),-3),
+        labels:['mlb3'], status:'completed', order:0 }),
+      mkTask({ id:'t11', projectId:projId, listId:'l1', taskNumber:11, title:'お問い合わせフォーム実装',
+        description:'バリデーション + reCAPTCHA を含む', assignees:['u_sato'], startDate: addDays(today(),1), dueDate: addDays(today(),4),
+        labels:['lb2','lb7'], status:'not_started', order:3 }),
+    ],
+    history: [
+      { id: uid('h'), type:'task_created', projectId:projId, taskId:'t1', userId:userId, ts: ts-7200000, text: '「デザイン案を3パターン作成」を作成' },
+      { id: uid('h'), type:'task_moved', projectId:projId, taskId:'t2', userId:userId, ts: ts-5400000, text: '「API設計」を 進行中 へ移動' },
+      { id: uid('h'), type:'comment', projectId:projId, taskId:'t1', userId:userId, ts: ts-3600000, text: '「デザイン案」にコメント' },
+    ],
+    archive: { tasks: [], lists: [], projects: [] },
+    notifications: [
+      { id: uid('n'), type:'mention', taskId:'t1', text:'@自分 がメンションされました', createdAt: ts-3600000, read: false },
+      { id: uid('n'), type:'due_soon', taskId:'t3', text:'「DB スキーマ設計」の締切が明日です', createdAt: ts-1800000, read: false },
+    ],
+    automation: { webhooks: [
+      { id: uid('w'), name:'Slack #general', url:'https://hooks.slack.com/services/...', events:['task_created','task_moved'], enabled:true },
+    ] },
+    apiKeys: [
+      { id: uid('k'), name:'Default Key', key:'jt_'+Math.random().toString(36).slice(2,18), createdAt: ts },
+    ],
+    aiSettings: { feedbackTone: 3, summaryDetail: 3 },
+  };
+}
+function mkTask(o){ return Object.assign({
+  description:'', assignees:[], startDate:null, dueDate:null, labels:[], checklist:[], comments:[],
+  status:'not_started', followers:[], files:[], archived:false, createdAt: Date.now(), updatedAt: Date.now(), order: 0,
+}, o); }
+
+/* =========================================
+ * Reducer
+ * ========================================= */
+function reducer(state, action) {
+  const ts = Date.now();
+  const log = (type, text, projectId, taskId) => ({
+    id: uid('h'), type, projectId, taskId, userId: state.currentUserId, ts, text,
+  });
+  switch (action.type) {
+    case 'SET_VIEW':
+      return { ...state, view: action.view, selectedProjectId: action.projectId ?? state.selectedProjectId };
+    case 'TOGGLE_DARK':
+      return { ...state, darkMode: !state.darkMode };
+    case 'TOGGLE_SIDEBAR':
+      return { ...state, sidebarOpen: !state.sidebarOpen };
+    case 'SWITCH_USER':
+      return { ...state, currentUserId: action.userId };
+
+    /* ===== Project ===== */
+    case 'ADD_PROJECT': {
+      const id = uid('p');
+      const np = { id, orgId: state.currentOrgId, name: action.name, icon: action.icon || '📋', color: action.color || 'blue',
+        archived:false, createdAt:ts, favorite:false,
+        lists: action.lists?.length ? action.lists.map((n,i)=>({id:uid('l'),name:n.name||n,autoStatus:n.autoStatus||null,order:i})) : [
+          { id: uid('l'), name:'未着手', autoStatus:'not_started', order:0 },
+          { id: uid('l'), name:'進行中', autoStatus:'in_progress', order:1 },
+          { id: uid('l'), name:'完了', autoStatus:'completed', order:2 },
+        ],
+        labels: action.labels || [
+          { id: uid('lb'), name:'優先度:高', color:'red' },
+          { id: uid('lb'), name:'優先度:中', color:'yellow' },
+          { id: uid('lb'), name:'優先度:低', color:'green' },
+        ],
+        members: [{ userId: state.currentUserId, role:'pm' }],
+      };
+      return { ...state, projects: [...state.projects, np], selectedProjectId: id, view:'board',
+        history: [log('project_created', `プロジェクト「${action.name}」を作成`, id), ...state.history] };
+    }
+    case 'UPDATE_PROJECT': {
+      return { ...state, projects: state.projects.map(p => p.id===action.id ? { ...p, ...action.patch } : p) };
+    }
+    case 'ARCHIVE_PROJECT':
+      return { ...state, projects: state.projects.map(p => p.id===action.id ? { ...p, archived:true } : p),
+        history: [log('project_archived',`プロジェクトをアーカイブ`,action.id), ...state.history] };
+    case 'RESTORE_PROJECT':
+      return { ...state, projects: state.projects.map(p => p.id===action.id ? { ...p, archived:false } : p) };
+    case 'DELETE_PROJECT':
+      return { ...state, projects: state.projects.filter(p => p.id!==action.id),
+        tasks: state.tasks.filter(t => t.projectId!==action.id) };
+    case 'DUPLICATE_PROJECT': {
+      const src = state.projects.find(p => p.id===action.id);
+      if (!src) return state;
+      const newId = uid('p');
+      const listIdMap = {};
+      const newLists = src.lists.map(l => { const nid = uid('l'); listIdMap[l.id]=nid; return {...l, id: nid}; });
+      const labelIdMap = {};
+      const newLabels = src.labels.map(l => { const nid = uid('lb'); labelIdMap[l.id]=nid; return {...l, id: nid}; });
+      const newProj = { ...src, id: newId, name: src.name+' (コピー)', lists: newLists, labels: newLabels, archived:false, createdAt: ts, favorite:false };
+      const srcTasks = state.tasks.filter(t => t.projectId===src.id && !t.archived);
+      let nextNum = state.nextTaskNumber;
+      const newTasks = srcTasks.map(t => ({
+        ...t, id: uid('t'), projectId: newId, listId: listIdMap[t.listId] || newLists[0].id,
+        labels: t.labels.map(lid => labelIdMap[lid] || lid).filter(Boolean),
+        comments: [], followers: [], taskNumber: nextNum++, createdAt: ts, updatedAt: ts,
+      }));
+      return { ...state, projects: [...state.projects, newProj], tasks: [...state.tasks, ...newTasks], nextTaskNumber: nextNum,
+        history: [log('project_duplicated',`プロジェクト「${src.name}」を複製`, newId), ...state.history] };
+    }
+    case 'TOGGLE_FAVORITE_PROJECT':
+      return { ...state, projects: state.projects.map(p => p.id===action.id ? { ...p, favorite: !p.favorite } : p) };
+
+    /* ===== Lists ===== */
+    case 'ADD_LIST': {
+      const id = uid('l');
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, lists: [...p.lists, { id, name: action.name, autoStatus: action.autoStatus || null, order: p.lists.length }]
+      } : p) };
+    }
+    case 'UPDATE_LIST':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, lists: p.lists.map(l => l.id===action.listId ? { ...l, ...action.patch } : l)
+      } : p) };
+    case 'DELETE_LIST': {
+      // archive tasks in this list
+      return { ...state,
+        projects: state.projects.map(p => p.id===action.projectId ? { ...p, lists: p.lists.filter(l => l.id!==action.listId) } : p),
+        tasks: state.tasks.map(t => t.projectId===action.projectId && t.listId===action.listId ? { ...t, archived:true } : t),
+      };
+    }
+    case 'REORDER_LISTS':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, lists: action.order.map((id, i) => ({ ...p.lists.find(l=>l.id===id), order: i }))
+      } : p) };
+
+    /* ===== Tasks ===== */
+    case 'ADD_TASK': {
+      const id = uid('t');
+      const proj = state.projects.find(p => p.id===action.projectId);
+      const list = proj?.lists.find(l => l.id===action.listId);
+      const num = state.nextTaskNumber;
+      const task = mkTask({ id, projectId: action.projectId, listId: action.listId, taskNumber: num,
+        title: action.title || '新しいタスク', status: list?.autoStatus || 'not_started',
+        order: state.tasks.filter(t => t.projectId===action.projectId && t.listId===action.listId).length,
+        createdAt: ts, updatedAt: ts, ...action.extra });
+      return { ...state, tasks: [...state.tasks, task], nextTaskNumber: num+1,
+        history: [log('task_created', `「${task.title}」を作成`, action.projectId, id), ...state.history] };
+    }
+    case 'UPDATE_TASK':
+      return { ...state, tasks: state.tasks.map(t => t.id===action.id ? { ...t, ...action.patch, updatedAt: ts } : t),
+        history: action.silent ? state.history : [log('task_updated', `「${state.tasks.find(t=>t.id===action.id)?.title}」を更新`, state.tasks.find(t=>t.id===action.id)?.projectId, action.id), ...state.history] };
+    case 'MOVE_TASK': {
+      const t = state.tasks.find(x => x.id===action.id);
+      if (!t) return state;
+      const proj = state.projects.find(p => p.id===t.projectId);
+      const newList = proj?.lists.find(l => l.id===action.listId);
+      const newStatus = newList?.autoStatus || t.status;
+      // re-order in target list
+      const targetTasks = state.tasks.filter(x => x.projectId===t.projectId && x.listId===action.listId && x.id!==action.id && !x.archived).sort((a,b)=>a.order-b.order);
+      const insertAt = typeof action.insertAt === 'number' ? Math.max(0, Math.min(action.insertAt, targetTasks.length)) : targetTasks.length;
+      targetTasks.splice(insertAt, 0, { ...t, listId: action.listId, status: newStatus });
+      const renumbered = targetTasks.map((x, i) => ({ ...x, order: i }));
+      return { ...state, tasks: state.tasks.map(x => {
+        if (x.id===action.id) return { ...x, listId: action.listId, status: newStatus, order: renumbered.find(r => r.id===x.id).order, updatedAt: ts };
+        const r = renumbered.find(r => r.id===x.id);
+        return r ? { ...x, order: r.order } : x;
+      }),
+      history: [log('task_moved', `「${t.title}」を「${newList?.name}」に移動`, t.projectId, t.id), ...state.history] };
+    }
+    case 'BULK_MOVE_TASKS': {
+      const { ids, listId } = action;
+      const newState = { ...state };
+      newState.tasks = state.tasks.map(t => {
+        if (!ids.includes(t.id)) return t;
+        const proj = state.projects.find(p => p.id===t.projectId);
+        const newList = proj?.lists.find(l => l.id===listId);
+        return { ...t, listId, status: newList?.autoStatus || t.status, updatedAt: ts };
+      });
+      return newState;
+    }
+    case 'ARCHIVE_TASK':
+      return { ...state, tasks: state.tasks.map(t => t.id===action.id ? { ...t, archived:true } : t) };
+    case 'BULK_ARCHIVE_TASKS':
+      return { ...state, tasks: state.tasks.map(t => action.ids.includes(t.id) ? { ...t, archived:true } : t) };
+    case 'RESTORE_TASK':
+      return { ...state, tasks: state.tasks.map(t => t.id===action.id ? { ...t, archived:false } : t) };
+    case 'DELETE_TASK':
+      return { ...state, tasks: state.tasks.filter(t => t.id!==action.id) };
+    case 'DUPLICATE_TASK': {
+      const src = state.tasks.find(t => t.id===action.id);
+      if (!src) return state;
+      const num = state.nextTaskNumber;
+      const dup = { ...src, id: uid('t'), title: src.title+' (コピー)', taskNumber: num,
+        comments: [], followers: [], createdAt: ts, updatedAt: ts,
+        order: state.tasks.filter(t => t.projectId===src.projectId && t.listId===src.listId).length };
+      return { ...state, tasks: [...state.tasks, dup], nextTaskNumber: num+1 };
+    }
+    case 'TOGGLE_FOLLOW': {
+      return { ...state, tasks: state.tasks.map(t => {
+        if (t.id !== action.id) return t;
+        const has = t.followers.includes(state.currentUserId);
+        return { ...t, followers: has ? t.followers.filter(u => u!==state.currentUserId) : [...t.followers, state.currentUserId] };
+      })};
+    }
+    case 'ADD_COMMENT': {
+      const t = state.tasks.find(x => x.id===action.taskId);
+      if (!t) return state;
+      const cmt = { id: uid('cm'), userId: state.currentUserId, text: action.text, createdAt: ts };
+      return { ...state, tasks: state.tasks.map(x => x.id===action.taskId ? { ...x, comments: [...x.comments, cmt] } : x),
+        history: [log('comment', `「${t.title}」にコメント`, t.projectId, t.id), ...state.history] };
+    }
+    case 'DELETE_COMMENT':
+      return { ...state, tasks: state.tasks.map(x => x.id===action.taskId ? { ...x, comments: x.comments.filter(c => c.id!==action.commentId) } : x) };
+    case 'ADD_CHECKLIST_ITEM': {
+      const item = { id: uid('c'), text: action.text, done: false, assignees: [], startDate: null, dueDate: null };
+      return { ...state, tasks: state.tasks.map(x => x.id===action.taskId ? { ...x, checklist: [...x.checklist, item] } : x) };
+    }
+    case 'UPDATE_CHECKLIST_ITEM':
+      return { ...state, tasks: state.tasks.map(x => x.id===action.taskId ? {
+        ...x, checklist: x.checklist.map(c => c.id===action.itemId ? { ...c, ...action.patch } : c) } : x) };
+    case 'DELETE_CHECKLIST_ITEM':
+      return { ...state, tasks: state.tasks.map(x => x.id===action.taskId ? {
+        ...x, checklist: x.checklist.filter(c => c.id!==action.itemId) } : x) };
+
+    /* ===== Labels ===== */
+    case 'ADD_LABEL':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, labels: [...p.labels, { id: uid('lb'), name: action.name, color: action.color || 'gray' }]
+      } : p) };
+    case 'UPDATE_LABEL':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, labels: p.labels.map(l => l.id===action.labelId ? { ...l, ...action.patch } : l) } : p) };
+    case 'DELETE_LABEL':
+      return { ...state,
+        projects: state.projects.map(p => p.id===action.projectId ? { ...p, labels: p.labels.filter(l => l.id!==action.labelId) } : p),
+        tasks: state.tasks.map(t => t.projectId===action.projectId ? { ...t, labels: t.labels.filter(id => id!==action.labelId) } : t) };
+
+    /* ===== Members ===== */
+    case 'ADD_ORG_MEMBER': {
+      const id = uid('u');
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, members: [...o.members, { id, name: action.name, email: action.email, role: action.role||'staff', avatar: action.avatar||'👤' }]
+      } : o) };
+    }
+    case 'UPDATE_ORG_MEMBER':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, members: o.members.map(m => m.id===action.id ? { ...m, ...action.patch } : m) } : o) };
+    case 'REMOVE_ORG_MEMBER':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, members: o.members.filter(m => m.id!==action.id) } : o) };
+    case 'ADD_PROJECT_MEMBER':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, members: p.members.find(m => m.userId===action.userId) ? p.members : [...p.members, { userId: action.userId, role: action.role||'member' }]
+      } : p) };
+    case 'UPDATE_PROJECT_MEMBER':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, members: p.members.map(m => m.userId===action.userId ? { ...m, role: action.role } : m) } : p) };
+    case 'REMOVE_PROJECT_MEMBER':
+      return { ...state, projects: state.projects.map(p => p.id===action.projectId ? {
+        ...p, members: p.members.filter(m => m.userId!==action.userId) } : p) };
+
+    /* ===== Bookmarks ===== */
+    case 'ADD_BOOKMARK':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, bookmarks: [...o.bookmarks, { id: uid('b'), title: action.title, url: action.url }] } : o) };
+    case 'DELETE_BOOKMARK':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, bookmarks: o.bookmarks.filter(b => b.id!==action.id) } : o) };
+
+    /* ===== Announcements (掲示板) ===== */
+    case 'ADD_ANNOUNCEMENT':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, announcements: [{ id: uid('a'), title: action.title, body: action.body, createdBy: state.currentUserId, createdAt: ts }, ...o.announcements] } : o) };
+    case 'DELETE_ANNOUNCEMENT':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, announcements: o.announcements.filter(a => a.id!==action.id) } : o) };
+
+    /* ===== Holidays ===== */
+    case 'SET_HOLIDAYS':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
+        ...o, holidays: { ...o.holidays, ...action.patch } } : o) };
+
+    /* ===== Org profile ===== */
+    case 'UPDATE_ORG':
+      return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? { ...o, ...action.patch } : o) };
+
+    /* ===== Notifications ===== */
+    case 'MARK_NOTIFICATION_READ':
+      return { ...state, notifications: state.notifications.map(n => n.id===action.id ? { ...n, read:true } : n) };
+    case 'MARK_ALL_NOTIFICATIONS_READ':
+      return { ...state, notifications: state.notifications.map(n => ({ ...n, read:true })) };
+
+    /* ===== Bulk import / export ===== */
+    case 'IMPORT_CSV_TASKS': {
+      const projId = action.projectId;
+      const proj = state.projects.find(p => p.id===projId);
+      if (!proj) return state;
+      let nextNum = state.nextTaskNumber;
+      const newTasks = [];
+      for (const row of action.rows) {
+        let list = proj.lists.find(l => l.name === row.list);
+        let listId;
+        if (!list) {
+          listId = uid('l');
+          // auto-create list
+          state = { ...state, projects: state.projects.map(p => p.id===projId ? { ...p, lists: [...p.lists, { id: listId, name: row.list || '未分類', autoStatus: null, order: p.lists.length }] } : p) };
+        } else listId = list.id;
+        newTasks.push(mkTask({ id: uid('t'), projectId: projId, listId, taskNumber: nextNum++,
+          title: row.title || '無題', description: row.description||'',
+          assignees: [], startDate: row.startDate||null, dueDate: row.dueDate||null,
+          labels: [], status: 'not_started', order: 0,
+          createdAt: ts, updatedAt: ts }));
+      }
+      return { ...state, tasks: [...state.tasks, ...newTasks], nextTaskNumber: nextNum };
+    }
+
+    /* ===== AI / Webhook config ===== */
+    case 'ADD_WEBHOOK':
+      return { ...state, automation: { ...state.automation, webhooks: [...state.automation.webhooks, { id: uid('w'), ...action.patch, enabled:true }] } };
+    case 'DELETE_WEBHOOK':
+      return { ...state, automation: { ...state.automation, webhooks: state.automation.webhooks.filter(w => w.id!==action.id) } };
+    case 'TOGGLE_WEBHOOK':
+      return { ...state, automation: { ...state.automation, webhooks: state.automation.webhooks.map(w => w.id===action.id ? { ...w, enabled: !w.enabled } : w) } };
+    case 'ADD_API_KEY':
+      return { ...state, apiKeys: [...state.apiKeys, { id: uid('k'), name: action.name, key: 'jt_'+Math.random().toString(36).slice(2,18), createdAt: ts }] };
+    case 'DELETE_API_KEY':
+      return { ...state, apiKeys: state.apiKeys.filter(k => k.id!==action.id) };
+    case 'SET_AI_SETTINGS':
+      return { ...state, aiSettings: { ...state.aiSettings, ...action.patch } };
+
+    case 'AI_GENERATE_TASKS': {
+      // Generates a board from a project description (mock AI)
+      const { projectId, prompt } = action;
+      const proj = state.projects.find(p => p.id===projectId);
+      if (!proj) return state;
+      const targetList = proj.lists.find(l => l.autoStatus==='not_started') || proj.lists[0];
+      const ideas = generateAITasks(prompt);
+      let nextNum = state.nextTaskNumber;
+      const newTasks = ideas.map((idea, i) => mkTask({
+        id: uid('t'), projectId, listId: targetList.id, taskNumber: nextNum++, title: idea.title, description: idea.description,
+        labels: [], assignees: [], startDate: today(), dueDate: addDays(today(), 3+i), status: 'not_started', order: i+100,
+        createdAt: ts, updatedAt: ts,
+      }));
+      return { ...state, tasks: [...state.tasks, ...newTasks], nextTaskNumber: nextNum,
+        history: [log('ai_generated', `AIで${ideas.length}件のタスクを自動生成`, projectId), ...state.history] };
+    }
+
+    case 'RESET_DATA':
+      return seedData();
+
+    default:
+      return state;
+  }
+}
+
+/* Mock AI task generation */
+function generateAITasks(prompt) {
+  // Simple template-based mock AI
+  const base = [
+    { title: '要件定義', description: `${prompt} に関する要件をまとめる` },
+    { title: '設計・スケジュール作成', description: '実装計画を立てる' },
+    { title: '初期実装', description: 'プロトタイプを作成' },
+    { title: 'レビュー', description: 'チームでレビュー' },
+    { title: 'テスト', description: 'QA を実施' },
+    { title: 'リリース準備', description: 'ドキュメント整備とリリース' },
+  ];
+  return base;
+}
+
+/* =========================================
+ * Context
+ * ========================================= */
+const AppCtx = createContext(null);
+const useApp = () => useContext(AppCtx);
+
+/* =========================================
+ * Reusable UI
+ * ========================================= */
+function Btn({ children, onClick, variant='primary', size='md', icon, className='', type='button', disabled }) {
+  const variants = {
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-100',
+    ghost: 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200',
+    danger: 'bg-red-600 hover:bg-red-700 text-white',
+    success: 'bg-green-600 hover:bg-green-700 text-white',
+    outline: 'border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800',
+  };
+  const sizes = { xs:'px-2 py-1 text-xs', sm:'px-3 py-1 text-sm', md:'px-3 py-1.5 text-sm', lg:'px-4 py-2 text-base' };
+  return <button type={type} disabled={disabled} onClick={onClick}
+    className={`inline-flex items-center gap-1.5 rounded font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
+    {icon && <span>{icon}</span>}{children}
+  </button>;
+}
+
+function Modal({ open, onClose, title, children, footer, size='md', closeOnBackdrop=true }) {
+  if (!open) return null;
+  const sizeMap = { sm:'max-w-md', md:'max-w-2xl', lg:'max-w-4xl', xl:'max-w-6xl', full:'max-w-[95vw]' };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 modal-backdrop"
+         onClick={(e) => { if (closeOnBackdrop && e.target===e.currentTarget) onClose(); }}>
+      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full ${sizeMap[size]} max-h-[90vh] flex flex-col modal-content`}>
+        <div className="flex items-center justify-between px-5 py-3 border-b dark:border-gray-700">
+          <h3 className="font-bold text-lg">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 text-2xl leading-none">×</button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">{children}</div>
+        {footer && <div className="border-t dark:border-gray-700 px-5 py-3 flex justify-end gap-2">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Input({ value, onChange, placeholder, type='text', className='', ...rest }) {
+  return <input type={type} value={value ?? ''} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder}
+    className={`w-full px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...rest} />;
+}
+
+function Textarea({ value, onChange, placeholder, rows=3, className='' }) {
+  return <textarea value={value ?? ''} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder} rows={rows}
+    className={`w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${className}`} />;
+}
+
+function Select({ value, onChange, options, className='' }) {
+  return <select value={value ?? ''} onChange={(e)=>onChange(e.target.value)}
+    className={`px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}>
+    {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+  </select>;
+}
+
+function Avatar({ user, size=24 }) {
+  if (!user) return <span className="inline-flex items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600" style={{width:size,height:size,fontSize:size*0.6}}>?</span>;
+  return <span title={user.name} className="inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700" style={{width:size,height:size,fontSize:size*0.6}}>{user.avatar}</span>;
+}
+
+function LabelPill({ label, removable, onRemove }) {
+  if (!label) return null;
+  const c = colorObj(label.color);
+  return <span className={`label-pill ${c.light}`}>{label.name}{removable && <button className="ml-1 hover:opacity-60" onClick={(e)=>{e.stopPropagation();onRemove?.();}}>×</button>}</span>;
+}
+
+function StatusPill({ status }) {
+  const s = statusObj(status);
+  return <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${s.color} text-white`}><span className="w-1.5 h-1.5 rounded-full bg-white/80"></span>{s.label}</span>;
+}
+
+function Markdown({ text }) {
+  if (!text) return <span className="text-gray-400 italic">説明なし</span>;
+  const html = marked.parse(text || '', { breaks: true });
+  return <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function EmojiPicker({ value, onChange, options }) {
+  return <div className="flex flex-wrap gap-1">{options.map(e => (
+    <button key={e} type="button" onClick={()=>onChange(e)}
+      className={`w-9 h-9 text-xl rounded hover:bg-gray-200 dark:hover:bg-gray-700 ${value===e?'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/30':''}`}>{e}</button>
+  ))}</div>;
+}
+
+function ColorPicker({ value, onChange, options }) {
+  return <div className="flex flex-wrap gap-1">{options.map(c => {
+    const co = LABEL_COLORS.find(x => x.id===c) || colorObj(c);
+    return <button key={c} type="button" onClick={()=>onChange(c)}
+      className={`w-7 h-7 rounded-full ${co.bg} ${value===c?'ring-2 ring-offset-2 ring-blue-500':''}`} title={c} />
+  })}</div>;
+}
+
+function Toast({ msg }) {
+  if (!msg) return null;
+  return <div className="fixed top-4 right-4 z-[100] bg-gray-900 text-white px-4 py-2 rounded shadow-lg toast">{msg}</div>;
+}
+
+/* =========================================
+ * Sidebar
+ * ========================================= */
+function Sidebar() {
+  const { state, dispatch, openModal } = useApp();
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  const projects = state.projects.filter(p => p.orgId===state.currentOrgId && !p.archived);
+  const archivedCount = state.projects.filter(p => p.archived).length;
+  const [collapsed, setCollapsed] = useState(false);
+
+  const navItem = (icon, label, view, active, badge) => (
+    <button onClick={()=>dispatch({ type:'SET_VIEW', view })}
+      className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition ${active?'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+      <span className="text-lg">{icon}</span>{!collapsed && <span className="flex-1 text-left">{label}</span>}
+      {!collapsed && badge != null && badge > 0 && <span className="text-xs bg-red-500 text-white rounded-full px-1.5 min-w-5 text-center">{badge}</span>}
+    </button>
+  );
+
+  const unreadCount = state.notifications.filter(n => !n.read).length;
+
+  return (
+    <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-white dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col transition-all`}>
+      <div className="p-3 border-b dark:border-gray-700 flex items-center gap-2">
+        <span className="text-2xl">🚀</span>
+        {!collapsed && <span className="font-bold text-blue-600">Jooto Clone</span>}
+        <button onClick={()=>setCollapsed(!collapsed)} className="ml-auto text-gray-400 hover:text-gray-600 text-sm">{collapsed?'»':'«'}</button>
+      </div>
+      <div className="p-2 border-b dark:border-gray-700">
+        <button onClick={()=>openModal('switchOrg')} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+          <span className="text-xl">{org?.icon}</span>
+          {!collapsed && <span className="text-sm font-medium truncate">{org?.name}</span>}
+        </button>
+      </div>
+      <nav className="p-2 space-y-0.5">
+        {navItem('📊','ダッシュボード','dashboard', state.view==='dashboard', unreadCount)}
+        {navItem('📝','全てのタスク','all-tasks', state.view==='all-tasks')}
+        {navItem('📅','全てのガント','all-gantt', state.view==='all-gantt')}
+        {navItem('🔍','検索','search', state.view==='search')}
+        {navItem('📦','アーカイブ','archive', state.view==='archive', archivedCount)}
+      </nav>
+      <div className="p-2 border-t dark:border-gray-700">
+        <div className="flex items-center justify-between px-2 mb-1">
+          {!collapsed && <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">プロジェクト</span>}
+          <button onClick={()=>openModal('newProject')} title="新しいプロジェクト" className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded px-1">+</button>
+        </div>
+        <div className="space-y-0.5 max-h-[40vh] overflow-y-auto scrollbar-thin">
+          {projects.sort((a,b)=> (b.favorite?1:0)-(a.favorite?1:0)).map(p => {
+            const tasksCount = state.tasks.filter(t => t.projectId===p.id && !t.archived && t.status!=='completed').length;
+            return <button key={p.id} onClick={()=>dispatch({ type:'SET_VIEW', view:'board', projectId:p.id })}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${state.selectedProjectId===p.id && state.view==='board'?'bg-blue-100 dark:bg-blue-900/40':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
+              <span className="text-lg">{p.icon}</span>
+              {!collapsed && <>
+                <span className="flex-1 text-left truncate">{p.name}</span>
+                {p.favorite && <span className="text-yellow-500 text-xs">★</span>}
+                {tasksCount > 0 && <span className="text-[10px] bg-gray-200 dark:bg-gray-700 rounded px-1">{tasksCount}</span>}
+              </>}
+            </button>;
+          })}
+        </div>
+      </div>
+      <div className="mt-auto p-2 border-t dark:border-gray-700 space-y-0.5">
+        {navItem('⚙️','設定','settings', state.view==='settings')}
+        {navItem('🔌','API・自動化','automation', state.view==='automation')}
+        {navItem('🤖','AI機能','ai', state.view==='ai')}
+        {navItem('📜','行動履歴','history', state.view==='history')}
+      </div>
+    </aside>
+  );
+}
+
+/* =========================================
+ * TopBar
+ * ========================================= */
+function TopBar() {
+  const { state, dispatch, openModal, currentUser } = useApp();
+  const [search, setSearch] = useState('');
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [showUser, setShowUser] = useState(false);
+  const unread = state.notifications.filter(n => !n.read).length;
+
+  const onSearch = (v) => {
+    setSearch(v);
+    if (v) dispatch({ type:'SET_VIEW', view:'search' });
+  };
+
+  return (
+    <div className="h-14 bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-4 flex items-center gap-3">
+      <div className="flex-1 max-w-md relative">
+        <input value={search} onChange={(e)=>onSearch(e.target.value)} placeholder="🔍 タスク・プロジェクトを検索..."
+          className="w-full px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <Btn size="sm" variant="ghost" icon="🤖" onClick={()=>openModal('aiGenerate')}>AI生成</Btn>
+      <Btn size="sm" variant="ghost" icon="📥" onClick={()=>openModal('import')}>インポート</Btn>
+      <button onClick={()=>dispatch({ type:'TOGGLE_DARK' })} className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="ダークモード">{state.darkMode?'🌙':'☀️'}</button>
+      <div className="relative">
+        <button onClick={()=>setShowNotifs(!showNotifs)} className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 relative">
+          🔔 {unread > 0 && <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-4 text-center">{unread}</span>}
+        </button>
+        {showNotifs && <NotificationsPopup onClose={()=>setShowNotifs(false)} />}
+      </div>
+      <div className="relative">
+        <button onClick={()=>setShowUser(!showUser)} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+          <Avatar user={currentUser} size={28} />
+          <span className="text-sm hidden md:inline">{currentUser?.name}</span>
+        </button>
+        {showUser && <UserMenu onClose={()=>setShowUser(false)} />}
+      </div>
+    </div>
+  );
+}
+
+function NotificationsPopup({ onClose }) {
+  const { state, dispatch, openTask } = useApp();
+  return (
+    <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-xl z-50">
+      <div className="px-3 py-2 flex items-center justify-between border-b dark:border-gray-700">
+        <span className="font-bold">通知</span>
+        <button onClick={()=>dispatch({type:'MARK_ALL_NOTIFICATIONS_READ'})} className="text-xs text-blue-600">全て既読</button>
+      </div>
+      <div className="max-h-80 overflow-y-auto scrollbar-thin">
+        {state.notifications.length === 0 && <p className="p-4 text-sm text-gray-500 text-center">通知はありません</p>}
+        {state.notifications.map(n => (
+          <button key={n.id} onClick={()=>{ dispatch({type:'MARK_NOTIFICATION_READ',id:n.id}); if (n.taskId) openTask(n.taskId); onClose(); }}
+            className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-0 ${!n.read?'bg-blue-50 dark:bg-blue-900/20':''}`}>
+            <div className="text-sm">{n.text}</div>
+            <div className="text-xs text-gray-500">{fmtDateTime(n.createdAt)}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UserMenu({ onClose }) {
+  const { state, dispatch } = useApp();
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  return (
+    <div className="absolute right-0 top-12 w-56 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-xl z-50">
+      <div className="p-3 border-b dark:border-gray-700">
+        <div className="text-xs text-gray-500 mb-1">ユーザー切替（デモ）</div>
+        {org.members.map(m => (
+          <button key={m.id} onClick={()=>{ dispatch({type:'SWITCH_USER',userId:m.id}); onClose(); }}
+            className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${state.currentUserId===m.id?'bg-blue-50 dark:bg-blue-900/30':''}`}>
+            <span>{m.avatar}</span><span className="text-sm">{m.name}</span>
+            <span className="text-xs text-gray-500 ml-auto">{ORG_ROLES.find(r=>r.id===m.role)?.label}</span>
+          </button>
+        ))}
+      </div>
+      <button onClick={()=>{ if (confirm('全データをリセットしてサンプルに戻します。よろしいですか？')) { dispatch({type:'RESET_DATA'}); onClose(); } }}
+        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">🔄 デモデータリセット</button>
+    </div>
+  );
+}
+
+/* =========================================
+ * Dashboard
+ * ========================================= */
+function Dashboard() {
+  const { state, dispatch, openTask, openModal, currentUser } = useApp();
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  const myTasks = state.tasks.filter(t => !t.archived && t.assignees.includes(state.currentUserId) && t.status !== 'completed');
+  const overdue = myTasks.filter(t => t.dueDate && isPastDate(t.dueDate));
+  const dueSoon = myTasks.filter(t => t.dueDate && !isPastDate(t.dueDate) && isWithinDays(t.dueDate, 14));
+  const followingTasks = state.tasks.filter(t => !t.archived && t.followers.includes(state.currentUserId));
+
+  const myMentions = state.tasks.flatMap(t => t.comments.filter(c => c.text.includes(`@${currentUser?.name}`)).map(c => ({ task: t, comment: c })));
+
+  return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">📊 ダッシュボード</h1>
+        <span className="text-sm text-gray-500">{fmtDateTime(Date.now())}</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card title={`🎯 マイタスク（未完了${myTasks.length}件、期限切れ${overdue.length}件）`}>
+          {myTasks.length === 0 && <p className="text-sm text-gray-500">タスクはありません 🎉</p>}
+          <div className="space-y-1 max-h-96 overflow-y-auto scrollbar-thin">
+            {[...overdue, ...dueSoon, ...myTasks.filter(t => !t.dueDate)].slice(0,15).map(t => (
+              <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} />
+            ))}
+          </div>
+        </Card>
+
+        <Card title={`📬 自分宛メンション（${myMentions.length}件）`}>
+          {myMentions.length === 0 && <p className="text-sm text-gray-500">メンションされたコメントはありません</p>}
+          <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-thin">
+            {myMentions.slice(0,10).map((m, i) => {
+              const u = userById(org, m.comment.userId);
+              return <button key={i} onClick={()=>openTask(m.task.id)} className="w-full text-left p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                <div className="flex items-center gap-2 text-xs text-gray-500"><Avatar user={u} size={20} />{u?.name} • {fmtDateTime(m.comment.createdAt)}</div>
+                <div className="text-sm mt-1">{m.comment.text}</div>
+                <div className="text-xs text-blue-600 mt-1">→ {m.task.title}</div>
+              </button>;
+            })}
+          </div>
+        </Card>
+
+        <Card title="📢 掲示板" action={
+          currentUser?.role!=='guest' && currentUser?.role!=='viewer' ?
+          <Btn size="xs" variant="ghost" onClick={()=>openModal('newAnnouncement')}>+ 投稿</Btn> : null
+        }>
+          {org.announcements.length === 0 && <p className="text-sm text-gray-500">お知らせはありません</p>}
+          <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin">
+            {org.announcements.map(a => {
+              const u = userById(org, a.createdBy);
+              return <div key={a.id} className="p-3 rounded border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-bold">{a.title}</h4>
+                  {currentUser?.id===a.createdBy && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_ANNOUNCEMENT',id:a.id});}} className="text-red-500 hover:text-red-700 text-xs">削除</button>}
+                </div>
+                <div className="text-xs text-gray-500 mb-2">{u?.name} • {fmtDateTime(a.createdAt)}</div>
+                <div className="text-sm"><Markdown text={a.body} /></div>
+              </div>;
+            })}
+          </div>
+        </Card>
+
+        <Card title="🔖 共有ブックマーク" action={
+          currentUser?.role==='admin' ? <Btn size="xs" variant="ghost" onClick={()=>openModal('newBookmark')}>+ 追加</Btn> : null
+        }>
+          {org.bookmarks.length === 0 && <p className="text-sm text-gray-500">登録されていません</p>}
+          <div className="space-y-1">
+            {org.bookmarks.map(b => (
+              <div key={b.id} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
+                <span>🔗</span>
+                <a href={b.url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 text-sm hover:underline truncate">{b.title}</a>
+                {currentUser?.role==='admin' && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_BOOKMARK',id:b.id});}} className="text-red-500 text-xs">削除</button>}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card title={`⭐ フォロー中（${followingTasks.length}件）`}>
+          {followingTasks.length === 0 && <p className="text-sm text-gray-500">フォロー中のタスクはありません</p>}
+          <div className="space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
+            {followingTasks.slice(0,10).map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} />)}
+          </div>
+        </Card>
+
+        <Card title="📈 プロジェクト進捗">
+          <div className="space-y-3">
+            {state.projects.filter(p=>!p.archived).map(p => {
+              const all = state.tasks.filter(t => t.projectId===p.id && !t.archived);
+              const done = all.filter(t => t.status==='completed');
+              const pct = all.length ? Math.round(done.length/all.length*100) : 0;
+              return <div key={p.id}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="flex items-center gap-1">{p.icon} {p.name}</span>
+                  <span className="text-gray-500">{done.length}/{all.length} ({pct}%)</span>
+                </div>
+                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded">
+                  <div className={`h-full rounded bg-${p.color}-500`} style={{ width: `${pct}%` }} />
+                </div>
+              </div>;
+            })}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, children, action }) {
+  return <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="font-bold">{title}</h3>
+      {action}
+    </div>
+    {children}
+  </div>;
+}
+
+function TaskRow({ task, onClick, showProject }) {
+  const { state } = useApp();
+  const proj = state.projects.find(p => p.id===task.projectId);
+  const overdue = task.dueDate && isPastDate(task.dueDate) && task.status !== 'completed';
+  const dueToday = isTodayDate(task.dueDate);
+  const dueTomorrow = isTomorrow(task.dueDate);
+  const dateColor = overdue ? 'text-red-600 font-bold' : dueToday ? 'text-red-500' : dueTomorrow ? 'text-orange-500' : 'text-gray-500';
+  return (
+    <button onClick={onClick} className="w-full text-left flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+      <span className={`w-1.5 h-1.5 rounded-full ${statusObj(task.status).dot}`}></span>
+      <span className="text-xs text-gray-400">#{task.taskNumber}</span>
+      <span className="flex-1 truncate text-sm">{task.title}</span>
+      {task.labels.slice(0,2).map(lid => { const l = labelById(proj, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
+      {task.dueDate && <span className={`text-xs ${dateColor}`}>{fmtDate(task.dueDate)}</span>}
+      {showProject && <span className="text-xs text-gray-400">{proj?.icon}</span>}
+    </button>
+  );
+}
+
+/* =========================================
+ * Kanban Board
+ * ========================================= */
+function Board() {
+  const { state, dispatch, openTask, openModal } = useApp();
+  const proj = state.projects.find(p => p.id===state.selectedProjectId);
+  const [draggingTaskId, setDraggingTaskId] = useState(null);
+  const [bulkSelected, setBulkSelected] = useState(new Set());
+  const [filter, setFilter] = useState({ assignee:'', label:'', status:'', search:'', followingOnly:false });
+
+  if (!proj) return <div className="p-8 text-gray-500">プロジェクトが選択されていません。サイドバーから選択するか、新規作成してください。</div>;
+
+  const filteredTasks = state.tasks.filter(t => {
+    if (t.projectId !== proj.id || t.archived) return false;
+    if (filter.assignee && !t.assignees.includes(filter.assignee)) return false;
+    if (filter.label && !t.labels.includes(filter.label)) return false;
+    if (filter.status && t.status !== filter.status) return false;
+    if (filter.followingOnly && !t.followers.includes(state.currentUserId)) return false;
+    if (filter.search && !(t.title+' '+t.description).toLowerCase().includes(filter.search.toLowerCase())) return false;
+    return true;
+  });
+
+  const toggleSelect = (id) => {
+    const ns = new Set(bulkSelected);
+    if (ns.has(id)) ns.delete(id); else ns.add(id);
+    setBulkSelected(ns);
+  };
+
+  const onDragStart = (e, taskId) => {
+    setDraggingTaskId(taskId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', taskId);
+  };
+  const onDrop = (e, listId) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const id = e.dataTransfer.getData('text/plain');
+    if (id) {
+      if (bulkSelected.has(id) && bulkSelected.size > 1) {
+        dispatch({ type:'BULK_MOVE_TASKS', ids: [...bulkSelected], listId });
+        setBulkSelected(new Set());
+      } else {
+        dispatch({ type:'MOVE_TASK', id, listId });
+      }
+    }
+    setDraggingTaskId(null);
+  };
+
+  const bulkArchive = () => {
+    if (bulkSelected.size && confirm(`${bulkSelected.size}件のタスクをアーカイブしますか？`)) {
+      dispatch({ type:'BULK_ARCHIVE_TASKS', ids: [...bulkSelected] });
+      setBulkSelected(new Set());
+    }
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2 flex-wrap">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          {proj.icon} {proj.name}
+          <button onClick={()=>dispatch({type:'TOGGLE_FAVORITE_PROJECT',id:proj.id})} className={`text-lg ${proj.favorite?'text-yellow-500':'text-gray-300'}`}>★</button>
+        </h2>
+        <div className="ml-auto flex gap-1">
+          <Btn size="sm" variant={state.view==='board'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>カンバン</Btn>
+          <Btn size="sm" variant={state.view==='gantt'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'gantt'})}>ガント</Btn>
+          <Btn size="sm" variant={state.view==='project-settings'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'project-settings'})}>設定</Btn>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2 flex-wrap text-sm">
+        <input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="🔍 タスクを絞り込み"
+          className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+        <Select value={filter.assignee} onChange={v=>setFilter({...filter,assignee:v})} options={[
+          {value:'',label:'担当者: 全員'},
+          ...state.organizations.find(o=>o.id===proj.orgId).members.map(m=>({value:m.id,label:m.name}))
+        ]} />
+        <Select value={filter.label} onChange={v=>setFilter({...filter,label:v})} options={[
+          {value:'',label:'ラベル: 全て'},
+          ...proj.labels.map(l=>({value:l.id,label:l.name}))
+        ]} />
+        <Select value={filter.status} onChange={v=>setFilter({...filter,status:v})} options={[
+          {value:'',label:'ステータス: 全て'},
+          ...STATUSES.map(s=>({value:s.id,label:s.label}))
+        ]} />
+        <label className="flex items-center gap-1"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} /> フォロー中のみ</label>
+        {(filter.search||filter.assignee||filter.label||filter.status||filter.followingOnly) &&
+          <Btn size="xs" variant="ghost" onClick={()=>setFilter({assignee:'',label:'',status:'',search:'',followingOnly:false})}>クリア</Btn>}
+        {bulkSelected.size > 0 && <>
+          <span className="ml-2 text-blue-600">{bulkSelected.size}件選択中</span>
+          <Btn size="xs" variant="danger" onClick={bulkArchive}>一括アーカイブ</Btn>
+          <Btn size="xs" variant="ghost" onClick={()=>setBulkSelected(new Set())}>選択解除</Btn>
+        </>}
+      </div>
+
+      <div className="flex-1 overflow-x-auto p-4 scrollbar-thin">
+        <div className="flex gap-3 min-w-max h-full">
+          {[...proj.lists].sort((a,b)=>a.order-b.order).map(list => (
+            <BoardList key={list.id} list={list} project={proj}
+              tasks={filteredTasks.filter(t => t.listId===list.id).sort((a,b)=>a.order-b.order)}
+              onDragStart={onDragStart} onDrop={onDrop}
+              draggingTaskId={draggingTaskId}
+              bulkSelected={bulkSelected} onToggleSelect={toggleSelect} />
+          ))}
+          <div className="w-72 flex-shrink-0">
+            <button onClick={()=>openModal('newList')}
+              className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-white dark:hover:bg-gray-800 hover:border-blue-400">
+              + リストを追加
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoardList({ list, project, tasks, onDragStart, onDrop, draggingTaskId, bulkSelected, onToggleSelect }) {
+  const { state, dispatch, openTask, openModal, setMsg } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(list.name);
+  const [showMenu, setShowMenu] = useState(false);
+
+  const onDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+  const onDragLeave = (e) => { e.currentTarget.classList.remove('drag-over'); };
+
+  const addTask = () => {
+    if (newTitle.trim()) {
+      dispatch({ type:'ADD_TASK', projectId: project.id, listId: list.id, title: newTitle.trim() });
+      setNewTitle(''); setMsg(`「${newTitle.trim()}」を追加しました`);
+    }
+    setAdding(false);
+  };
+
+  const saveListName = () => {
+    if (editName.trim() && editName !== list.name) {
+      dispatch({ type:'UPDATE_LIST', projectId: project.id, listId: list.id, patch: { name: editName.trim() } });
+    }
+    setEditing(false);
+  };
+
+  const setAutoStatus = (status) => {
+    dispatch({ type:'UPDATE_LIST', projectId: project.id, listId: list.id, patch: { autoStatus: status || null } });
+    setShowMenu(false);
+    setMsg('ステータス自動変更を設定しました');
+  };
+
+  const deleteList = () => {
+    if (confirm(`リスト「${list.name}」を削除します。中のタスクはアーカイブされます。よろしいですか？`)) {
+      dispatch({ type:'DELETE_LIST', projectId: project.id, listId: list.id });
+    }
+    setShowMenu(false);
+  };
+
+  return (
+    <div className="w-72 flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded-lg flex flex-col max-h-full"
+         onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e)=>onDrop(e,list.id)}>
+      <div className="p-3 flex items-center gap-2 border-b dark:border-gray-700">
+        {list.autoStatus && <span className={`w-2 h-2 rounded-full ${statusObj(list.autoStatus).color}`} title={`自動: ${statusObj(list.autoStatus).label}`}></span>}
+        {editing ? (
+          <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)} onBlur={saveListName} onKeyDown={e=>e.key==='Enter'&&saveListName()}
+            className="flex-1 px-2 py-1 rounded border border-blue-400 bg-white dark:bg-gray-700 text-sm" />
+        ) : (
+          <h3 onClick={()=>setEditing(true)} className="flex-1 font-bold text-sm cursor-pointer">{list.name}</h3>
+        )}
+        <span className="text-xs text-gray-500 bg-gray-200 dark:bg-gray-700 rounded px-1.5">{tasks.length}</span>
+        <div className="relative">
+          <button onClick={()=>setShowMenu(!showMenu)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-1">⋯</button>
+          {showMenu && <div className="absolute right-0 top-7 w-56 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-30">
+            <div className="px-3 py-2 text-xs font-bold text-gray-500 border-b dark:border-gray-700">ステータス自動変更</div>
+            <button onClick={()=>setAutoStatus('')} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${!list.autoStatus?'bg-blue-50 dark:bg-blue-900/30':''}`}>なし</button>
+            {STATUSES.map(s => (
+              <button key={s.id} onClick={()=>setAutoStatus(s.id)} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 ${list.autoStatus===s.id?'bg-blue-50 dark:bg-blue-900/30':''}`}>
+                <span className={`w-2 h-2 rounded-full ${s.color}`}></span>{s.label}
+              </button>
+            ))}
+            <div className="border-t dark:border-gray-700 mt-1">
+              <button onClick={deleteList} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">🗑 リストを削除</button>
+            </div>
+          </div>}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin min-h-[100px]">
+        {tasks.map(t => (
+          <BoardCard key={t.id} task={t} project={project}
+            onClick={() => openTask(t.id)}
+            onDragStart={(e)=>onDragStart(e,t.id)}
+            isDragging={draggingTaskId===t.id}
+            isSelected={bulkSelected.has(t.id)}
+            onToggleSelect={(e) => { if (e.metaKey || e.ctrlKey) { e.preventDefault(); onToggleSelect(t.id); } }}
+          />
+        ))}
+        {tasks.length === 0 && <div className="text-center text-xs text-gray-400 py-4">ここにドロップ</div>}
+      </div>
+
+      <div className="p-2 border-t dark:border-gray-700">
+        {adding ? (
+          <div className="space-y-1">
+            <textarea autoFocus value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="タスク名" rows={2}
+              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addTask();}}}
+              className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+            <div className="flex gap-1">
+              <Btn size="xs" onClick={addTask}>追加</Btn>
+              <Btn size="xs" variant="ghost" onClick={()=>{setAdding(false);setNewTitle('');}}>キャンセル</Btn>
+            </div>
+          </div>
+        ) : (
+          <button onClick={()=>setAdding(true)} className="w-full text-left text-sm text-gray-500 hover:text-blue-600 px-2 py-1">+ カードを追加</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BoardCard({ task, project, onClick, onDragStart, isDragging, isSelected, onToggleSelect }) {
+  const { state, dispatch } = useApp();
+  const org = state.organizations.find(o => o.id===project.orgId);
+  const overdue = task.dueDate && isPastDate(task.dueDate) && task.status!=='completed';
+  const dueToday = isTodayDate(task.dueDate) && task.status!=='completed';
+  const dueTomorrow = isTomorrow(task.dueDate) && task.status!=='completed';
+  const checklistDone = task.checklist.filter(c => c.done).length;
+  const followed = task.followers.includes(state.currentUserId);
+
+  return (
+    <div draggable onDragStart={onDragStart}
+      onClick={(e)=>{ if(e.metaKey||e.ctrlKey){ onToggleSelect(e); } else { onClick(); } }}
+      className={`bg-white dark:bg-gray-700 rounded shadow-sm p-2 cursor-pointer hover:shadow-md transition group ${isDragging?'card-dragging':''} ${isSelected?'selected-card':''}`}>
+      {task.labels.length > 0 && <div className="flex flex-wrap gap-0.5 mb-1">
+        {task.labels.map(lid => { const l = labelById(project, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
+      </div>}
+      <div className="flex items-start gap-1">
+        <span className="text-xs text-gray-400 mt-0.5">#{task.taskNumber}</span>
+        <span className="flex-1 text-sm font-medium leading-snug">{task.title}</span>
+        {followed && <span className="text-yellow-500 text-xs">★</span>}
+      </div>
+      <div className="flex items-center justify-between mt-2 text-xs">
+        <div className="flex items-center gap-1.5 text-gray-500">
+          {task.dueDate && <span className={`flex items-center gap-1 ${overdue?'text-red-600 font-bold':dueToday?'text-red-500':dueTomorrow?'text-orange-500':''}`}>📅 {fmtDate(task.dueDate)}</span>}
+          {task.checklist.length > 0 && <span>☑ {checklistDone}/{task.checklist.length}</span>}
+          {task.comments.length > 0 && <span>💬 {task.comments.length}</span>}
+          {task.files.length > 0 && <span>📎 {task.files.length}</span>}
+        </div>
+        <div className="flex -space-x-1">
+          {task.assignees.slice(0,3).map(uid => <Avatar key={uid} user={userById(org,uid)} size={20} />)}
+          {task.assignees.length > 3 && <span className="text-xs">+{task.assignees.length-3}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================
+ * Task Modal
+ * ========================================= */
+function TaskModal({ taskId, onClose }) {
+  const { state, dispatch, openTask, currentUser, setMsg } = useApp();
+  const task = state.tasks.find(t => t.id===taskId);
+  const proj = state.projects.find(p => p.id===task?.projectId);
+  const org = state.organizations.find(o => o.id===proj?.orgId);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descBuf, setDescBuf] = useState(task?.description || '');
+  const [titleBuf, setTitleBuf] = useState(task?.title || '');
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [newChecklistText, setNewChecklistText] = useState('');
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [showAssigneePicker, setShowAssigneePicker] = useState(false);
+
+  useEffect(() => { setDescBuf(task?.description || ''); setTitleBuf(task?.title || ''); }, [taskId, task?.description, task?.title]);
+
+  if (!task) return null;
+  const update = (patch, silent=false) => dispatch({ type:'UPDATE_TASK', id: task.id, patch, silent });
+  const list = proj.lists.find(l => l.id===task.listId);
+  const followed = task.followers.includes(state.currentUserId);
+
+  const sortedComments = [...task.comments].sort((a,b)=>a.createdAt-b.createdAt);
+
+  return (
+    <Modal open={true} onClose={onClose} size="xl" title={null}>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Main */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-start gap-2">
+            <span className="text-gray-400 text-sm mt-1">#{task.taskNumber}</span>
+            {editingTitle ? (
+              <input autoFocus value={titleBuf} onChange={e=>setTitleBuf(e.target.value)}
+                onBlur={()=>{ if(titleBuf.trim() && titleBuf!==task.title) update({title:titleBuf.trim()}); setEditingTitle(false); }}
+                onKeyDown={e=>e.key==='Enter'&&e.target.blur()}
+                className="flex-1 text-xl font-bold px-2 py-1 rounded border border-blue-400 bg-white dark:bg-gray-700" />
+            ) : (
+              <h2 onClick={()=>setEditingTitle(true)} className="flex-1 text-xl font-bold cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 px-1 rounded">{task.title}</h2>
+            )}
+            <button onClick={()=>dispatch({type:'TOGGLE_FOLLOW',id:task.id})}
+              className={`text-2xl ${followed?'text-yellow-500':'text-gray-300 hover:text-yellow-400'}`} title="フォロー">★</button>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span>{proj.icon} {proj.name}</span>
+            <span>›</span>
+            <span>{list?.name}</span>
+            <span>•</span>
+            <span>更新: {fmtDateTime(task.updatedAt)}</span>
+          </div>
+
+          {/* Description */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-sm">📄 説明（マークダウン対応）</h3>
+              {!editingDesc && <button onClick={()=>setEditingDesc(true)} className="text-xs text-blue-600">編集</button>}
+            </div>
+            {editingDesc ? (
+              <div>
+                <Textarea value={descBuf} onChange={setDescBuf} rows={6} placeholder="マークダウンで説明を入力..." />
+                <div className="flex gap-2 mt-2">
+                  <Btn size="sm" onClick={()=>{ update({description:descBuf}); setEditingDesc(false); }}>保存</Btn>
+                  <Btn size="sm" variant="ghost" onClick={()=>{ setDescBuf(task.description||''); setEditingDesc(false); }}>キャンセル</Btn>
+                </div>
+              </div>
+            ) : (
+              <div onClick={()=>setEditingDesc(true)} className="p-3 rounded bg-gray-50 dark:bg-gray-700 cursor-pointer min-h-[80px]">
+                <Markdown text={task.description} />
+              </div>
+            )}
+          </div>
+
+          {/* Checklist */}
+          <div>
+            <h3 className="font-bold text-sm mb-1">☑ チェックリスト ({task.checklist.filter(c=>c.done).length}/{task.checklist.length})</h3>
+            {task.checklist.length > 0 && <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mb-2">
+              <div className="h-full rounded bg-green-500" style={{width: task.checklist.length ? `${task.checklist.filter(c=>c.done).length/task.checklist.length*100}%` : 0}} />
+            </div>}
+            <div className="space-y-1">
+              {task.checklist.map(c => (
+                <ChecklistItem key={c.id} item={c} task={task} org={org} />
+              ))}
+            </div>
+            <div className="flex gap-1 mt-2">
+              <Input value={newChecklistText} onChange={setNewChecklistText} placeholder="新しい項目..." />
+              <Btn size="sm" onClick={()=>{ if(newChecklistText.trim()){dispatch({type:'ADD_CHECKLIST_ITEM',taskId:task.id,text:newChecklistText.trim()});setNewChecklistText('');} }}>追加</Btn>
+            </div>
+          </div>
+
+          {/* Comments */}
+          <div>
+            <h3 className="font-bold text-sm mb-2">💬 コメント ({task.comments.length})</h3>
+            <div className="space-y-2 mb-3">
+              {sortedComments.map(c => {
+                const u = userById(org, c.userId);
+                return <div key={c.id} className="flex gap-2">
+                  <Avatar user={u} size={28} />
+                  <div className="flex-1 bg-gray-50 dark:bg-gray-700 rounded p-2">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                      <span><b>{u?.name}</b> • {fmtDateTime(c.createdAt)}</span>
+                      {c.userId===state.currentUserId && <button onClick={()=>{if(confirm('削除しますか？'))dispatch({type:'DELETE_COMMENT',taskId:task.id,commentId:c.id});}} className="text-red-500">削除</button>}
+                    </div>
+                    <div className="text-sm whitespace-pre-wrap">{c.text}</div>
+                  </div>
+                </div>;
+              })}
+            </div>
+            <div className="flex gap-2">
+              <Avatar user={currentUser} size={28} />
+              <div className="flex-1">
+                <Textarea value={newComment} onChange={setNewComment} placeholder="コメントを書く... (@でメンション)" rows={2} />
+                <div className="flex justify-between mt-1">
+                  <div className="flex gap-1 text-xs">
+                    <button onClick={()=>setNewComment(newComment+'@'+currentUser?.name+' ')} className="text-blue-600">@メンション</button>
+                    <button onClick={()=>{
+                      const allMembers = proj.members.map(m => userById(org, m.userId)?.name).filter(Boolean);
+                      setNewComment(newComment + allMembers.map(n => '@'+n).join(' ') + ' ');
+                    }} className="text-blue-600">@全員</button>
+                  </div>
+                  <Btn size="sm" onClick={()=>{ if(newComment.trim()){dispatch({type:'ADD_COMMENT',taskId:task.id,text:newComment.trim()});setNewComment('');setMsg('コメントを投稿しました');} }}>送信</Btn>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">ステータス</h4>
+            <Select value={task.status} onChange={v=>update({status:v})} className="w-full"
+              options={STATUSES.map(s=>({value:s.id,label:s.label}))} />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">リスト</h4>
+            <Select value={task.listId} onChange={v=>dispatch({type:'MOVE_TASK',id:task.id,listId:v})} className="w-full"
+              options={proj.lists.map(l=>({value:l.id,label:l.name}))} />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">担当者</h4>
+            <div className="flex flex-wrap gap-1 mb-1">
+              {task.assignees.map(uid => {
+                const u = userById(org,uid);
+                return <span key={uid} className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded px-2 py-0.5 text-xs">
+                  <Avatar user={u} size={18} />{u?.name}
+                  <button onClick={()=>update({assignees:task.assignees.filter(x=>x!==uid)})} className="text-gray-400 hover:text-red-500">×</button>
+                </span>;
+              })}
+            </div>
+            <button onClick={()=>setShowAssigneePicker(!showAssigneePicker)} className="text-xs text-blue-600">+ 追加</button>
+            {showAssigneePicker && <div className="mt-1 p-2 border dark:border-gray-700 rounded max-h-40 overflow-y-auto">
+              {proj.members.map(m => {
+                const u = userById(org, m.userId);
+                if (!u || task.assignees.includes(u.id)) return null;
+                return <button key={u.id} onClick={()=>{update({assignees:[...task.assignees,u.id]}); setShowAssigneePicker(false);}}
+                  className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                  <Avatar user={u} size={20} /> {u.name}
+                </button>;
+              })}
+            </div>}
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">期間</h4>
+            <div className="space-y-1">
+              <input type="date" value={task.startDate||''} onChange={e=>update({startDate:e.target.value||null})}
+                className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              <input type="date" value={task.dueDate||''} onChange={e=>update({dueDate:e.target.value||null})}
+                className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+            </div>
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">ラベル（最大4）</h4>
+            <div className="flex flex-wrap gap-1 mb-1">
+              {task.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} removable onRemove={()=>update({labels:task.labels.filter(x=>x!==lid)})} />)}
+            </div>
+            <button onClick={()=>setShowLabelPicker(!showLabelPicker)} className="text-xs text-blue-600">+ 追加</button>
+            {showLabelPicker && <div className="mt-1 p-2 border dark:border-gray-700 rounded max-h-40 overflow-y-auto">
+              {proj.labels.filter(l=>!task.labels.includes(l.id)).map(l => (
+                <button key={l.id} onClick={()=>{ if(task.labels.length<4){ update({labels:[...task.labels,l.id]}); setShowLabelPicker(false); } else { alert('ラベルは最大4個まで'); } }}
+                  className="block w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                  <LabelPill label={l} />
+                </button>
+              ))}
+            </div>}
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-gray-500 mb-1">📎 ファイル ({task.files.length})</h4>
+            <div className="space-y-1">
+              {task.files.map((f,i) => <div key={i} className="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-700 rounded px-2 py-1">
+                <span>📄 {f.name}</span>
+                <button onClick={()=>update({files:task.files.filter((_,j)=>j!==i)})} className="text-red-500">×</button>
+              </div>)}
+              <input type="file" multiple onChange={e=>{
+                const files = [...e.target.files].map(f => ({ name: f.name, size: f.size }));
+                update({files: [...task.files, ...files]});
+              }} className="text-xs" />
+              <p className="text-[10px] text-gray-400">※ デモのためファイル名のみ記録します</p>
+            </div>
+          </div>
+          <div className="border-t dark:border-gray-700 pt-3 space-y-1">
+            <Btn size="sm" variant="outline" className="w-full" onClick={()=>{dispatch({type:'DUPLICATE_TASK',id:task.id}); setMsg('タスクを複製しました'); onClose();}}>📋 複製</Btn>
+            <Btn size="sm" variant="outline" className="w-full" onClick={()=>{ if(confirm('アーカイブしますか？')){dispatch({type:'ARCHIVE_TASK',id:task.id});onClose();} }}>📦 アーカイブ</Btn>
+            <Btn size="sm" variant="danger" className="w-full" onClick={()=>{ if(confirm('完全に削除しますか？取り消せません。')){dispatch({type:'DELETE_TASK',id:task.id});onClose();} }}>🗑 削除</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ChecklistItem({ item, task, org }) {
+  const { dispatch } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+  const [showDates, setShowDates] = useState(false);
+  return (
+    <div className="flex items-start gap-2 p-1 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded">
+      <input type="checkbox" checked={item.done} onChange={()=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{done:!item.done}})}
+        className="mt-1" />
+      <div className="flex-1">
+        {editing ? (
+          <input autoFocus value={text} onChange={e=>setText(e.target.value)} onBlur={()=>{dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{text}}); setEditing(false);}}
+            onKeyDown={e=>e.key==='Enter'&&e.target.blur()}
+            className="w-full px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-gray-700 text-sm" />
+        ) : (
+          <div onClick={()=>setEditing(true)} className={`text-sm cursor-pointer ${item.done?'line-through text-gray-400':''}`}>{item.text}</div>
+        )}
+        {(item.dueDate || showDates) && <div className="flex items-center gap-2 mt-1 text-xs">
+          <input type="date" value={item.startDate||''} onChange={e=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{startDate:e.target.value||null}})}
+            className="px-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700" />
+          <input type="date" value={item.dueDate||''} onChange={e=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{dueDate:e.target.value||null}})}
+            className="px-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700" />
+        </div>}
+      </div>
+      <button onClick={()=>setShowDates(!showDates)} className="text-gray-400 text-xs">📅</button>
+      <button onClick={()=>{if(confirm('削除しますか？'))dispatch({type:'DELETE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id});}} className="text-gray-400 hover:text-red-500 text-xs">×</button>
+    </div>
+  );
+}
+
+/* =========================================
+ * Gantt Chart
+ * ========================================= */
+function GanttView({ projectId, allProjects }) {
+  const { state, openTask } = useApp();
+  const projects = allProjects ? state.projects.filter(p => !p.archived) : state.projects.filter(p => p.id===projectId);
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+
+  const allTasks = state.tasks.filter(t => !t.archived && t.startDate && t.dueDate && projects.some(p => p.id===t.projectId));
+
+  if (allTasks.length === 0) return <div className="p-8 text-gray-500">期間が設定されたタスクがありません</div>;
+
+  const dates = allTasks.flatMap(t => [t.startDate, t.dueDate]).sort();
+  const minD = dates[0];
+  const maxD = dates[dates.length-1];
+  const startD = addDays(minD, -3);
+  const endD = addDays(maxD, 3);
+  const totalDays = daysBetween(startD, endD);
+  const dayWidth = 32;
+
+  const isHoliday = (d) => {
+    const dt = new Date(d);
+    if (org.holidays.weeklyOff.includes(dt.getDay())) return true;
+    if (org.holidays.jpHolidays && JP_HOLIDAYS.has(d)) return true;
+    if (org.holidays.customHolidays.includes(d)) return true;
+    return false;
+  };
+
+  const dayStrs = [];
+  for (let i=0; i<=totalDays; i++) dayStrs.push(addDays(startD, i));
+
+  return (
+    <div className="flex-1 overflow-auto scrollbar-thin">
+      <div style={{ minWidth: (totalDays+1)*dayWidth + 240 }}>
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex">
+          <div className="w-60 p-2 border-r dark:border-gray-700 font-bold text-sm">タスク</div>
+          <div className="flex">
+            {dayStrs.map(d => {
+              const dt = new Date(d);
+              const holiday = isHoliday(d);
+              const todayCl = d===today() ? 'bg-blue-100 dark:bg-blue-900/30 font-bold' : '';
+              return <div key={d} className={`text-center text-[10px] border-r dark:border-gray-700 ${holiday?'bg-red-50 dark:bg-red-900/20':''} ${todayCl}`} style={{ width: dayWidth }}>
+                <div>{dt.getMonth()+1}/{dt.getDate()}</div>
+                <div className="text-gray-400">{['日','月','火','水','木','金','土'][dt.getDay()]}</div>
+              </div>;
+            })}
+          </div>
+        </div>
+        {/* Rows */}
+        {projects.map(proj => {
+          const projTasks = allTasks.filter(t => t.projectId===proj.id).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+          if (projTasks.length === 0) return null;
+          return <Fragment key={proj.id}>
+            <div className="bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700 px-2 py-1 font-bold text-sm flex items-center gap-1">
+              {proj.icon} {proj.name}
+            </div>
+            {projTasks.map(t => {
+              const startOff = daysBetween(startD, t.startDate);
+              const dur = daysBetween(t.startDate, t.dueDate) + 1;
+              const overdue = isPastDate(t.dueDate) && t.status!=='completed';
+              const sObj = statusObj(t.status);
+              return <div key={t.id} className="flex border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                <div className="w-60 p-2 border-r dark:border-gray-700 text-sm truncate">
+                  <button onClick={()=>openTask(t.id)} className="text-left hover:text-blue-600">
+                    <span className="text-xs text-gray-400 mr-1">#{t.taskNumber}</span>{t.title}
+                  </button>
+                </div>
+                <div className="relative flex" style={{ width: (totalDays+1)*dayWidth }}>
+                  {dayStrs.map(d => (
+                    <div key={d} className={`border-r dark:border-gray-700 ${isHoliday(d)?'bg-red-50 dark:bg-red-900/10':''} ${d===today()?'bg-blue-50 dark:bg-blue-900/10':''}`} style={{ width: dayWidth, height: 32 }} />
+                  ))}
+                  <button onClick={()=>openTask(t.id)} title={`${t.title} (${t.startDate}〜${t.dueDate})`}
+                    className={`gantt-bar absolute top-1 h-6 rounded ${sObj.color} text-white text-xs px-2 flex items-center overflow-hidden ${overdue?'ring-2 ring-red-600':''}`}
+                    style={{ left: startOff*dayWidth+2, width: dur*dayWidth-4 }}>
+                    {t.title}
+                  </button>
+                </div>
+              </div>;
+            })}
+          </Fragment>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================
+ * All Tasks View
+ * ========================================= */
+function AllTasksView() {
+  const { state, openTask } = useApp();
+  const [filter, setFilter] = useState({ assignee:'', status:'', period:'all', followingOnly:false, hasDate:'all', projectId:'' });
+  const [sort, setSort] = useState({ key:'dueDate', dir:'asc' });
+
+  let tasks = state.tasks.filter(t => !t.archived);
+  if (filter.projectId) tasks = tasks.filter(t => t.projectId===filter.projectId);
+  if (filter.assignee) tasks = tasks.filter(t => t.assignees.includes(filter.assignee));
+  if (filter.status) tasks = tasks.filter(t => t.status===filter.status);
+  if (filter.followingOnly) tasks = tasks.filter(t => t.followers.includes(state.currentUserId));
+  if (filter.hasDate==='none') tasks = tasks.filter(t => !t.dueDate);
+  if (filter.hasDate==='dated') tasks = tasks.filter(t => t.dueDate);
+  if (filter.period==='overdue') tasks = tasks.filter(t => t.dueDate && isPastDate(t.dueDate) && t.status!=='completed');
+  if (filter.period==='today') tasks = tasks.filter(t => isTodayDate(t.dueDate));
+  if (filter.period==='week') tasks = tasks.filter(t => isWithinDays(t.dueDate, 7));
+  if (filter.period==='month') tasks = tasks.filter(t => isWithinDays(t.dueDate, 30));
+  tasks.sort((a,b) => {
+    let av = a[sort.key]||'', bv = b[sort.key]||'';
+    if (sort.key==='projectId') { av = state.projects.find(p=>p.id===av)?.name||''; bv = state.projects.find(p=>p.id===bv)?.name||''; }
+    return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.dir==='asc' ? 1 : -1);
+  });
+  const setS = (k) => setSort({ key:k, dir: sort.key===k && sort.dir==='asc' ? 'desc' : 'asc' });
+
+  const exportCSV = () => {
+    const rows = [['番号','プロジェクト','リスト','タイトル','ステータス','担当者','開始日','締切日','ラベル']];
+    tasks.forEach(t => {
+      const proj = state.projects.find(p => p.id===t.projectId);
+      const list = proj?.lists.find(l => l.id===t.listId);
+      const org = state.organizations.find(o => o.id===proj?.orgId);
+      rows.push([
+        t.taskNumber, proj?.name||'', list?.name||'', t.title, statusObj(t.status).label,
+        t.assignees.map(u => userById(org,u)?.name).join(','),
+        t.startDate||'', t.dueDate||'',
+        t.labels.map(lid => labelById(proj,lid)?.name).join(','),
+      ]);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `tasks_${today()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2 flex-wrap">
+        <h2 className="text-xl font-bold">📝 全てのタスク（{tasks.length}件）</h2>
+        <div className="ml-auto flex gap-1">
+          <Btn size="sm" variant="outline" onClick={exportCSV}>📤 CSVエクスポート</Btn>
+        </div>
+      </div>
+      <div className="px-4 py-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2 flex-wrap text-sm">
+        <Select value={filter.projectId} onChange={v=>setFilter({...filter,projectId:v})} options={[
+          {value:'',label:'プロジェクト: 全て'},
+          ...state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))
+        ]} />
+        <Select value={filter.assignee} onChange={v=>setFilter({...filter,assignee:v})} options={[
+          {value:'',label:'担当者: 全員'},
+          ...state.organizations.find(o=>o.id===state.currentOrgId).members.map(m=>({value:m.id,label:m.name}))
+        ]} />
+        <Select value={filter.status} onChange={v=>setFilter({...filter,status:v})} options={[
+          {value:'',label:'ステータス: 全て'},
+          ...STATUSES.map(s=>({value:s.id,label:s.label}))
+        ]} />
+        <Select value={filter.period} onChange={v=>setFilter({...filter,period:v})} options={[
+          {value:'all',label:'期間: 全て'},
+          {value:'overdue',label:'期限切れ'},
+          {value:'today',label:'今日'},
+          {value:'week',label:'今週中'},
+          {value:'month',label:'今月中'},
+        ]} />
+        <Select value={filter.hasDate} onChange={v=>setFilter({...filter,hasDate:v})} options={[
+          {value:'all',label:'日付: 全て'},
+          {value:'dated',label:'日付あり'},
+          {value:'none',label:'期間なし'},
+        ]} />
+        <label className="flex items-center gap-1"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} /> フォロー中のみ</label>
+      </div>
+      <div className="flex-1 overflow-auto scrollbar-thin">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
+            <tr>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('taskNumber')}>#</th>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('projectId')}>プロジェクト</th>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('title')}>タイトル</th>
+              <th className="text-left p-2">担当者</th>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('status')}>ステータス</th>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('startDate')}>開始日</th>
+              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('dueDate')}>締切日</th>
+              <th className="text-left p-2">ラベル</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map(t => {
+              const proj = state.projects.find(p=>p.id===t.projectId);
+              const org = state.organizations.find(o=>o.id===proj?.orgId);
+              const overdue = t.dueDate && isPastDate(t.dueDate) && t.status!=='completed';
+              const dueToday = isTodayDate(t.dueDate);
+              const dueTomorrow = isTomorrow(t.dueDate);
+              const dateColor = overdue?'text-red-600 font-bold':dueToday?'text-red-500':dueTomorrow?'text-orange-500':'';
+              return <tr key={t.id} onClick={()=>openTask(t.id)} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                <td className="p-2 text-gray-400">{t.taskNumber}</td>
+                <td className="p-2"><span>{proj?.icon}</span> {proj?.name}</td>
+                <td className="p-2">{t.followers.includes(state.currentUserId)&&'⭐ '}{t.title}</td>
+                <td className="p-2"><div className="flex -space-x-1">{t.assignees.map(u=><Avatar key={u} user={userById(org,u)} size={20} />)}</div></td>
+                <td className="p-2"><StatusPill status={t.status} /></td>
+                <td className="p-2 text-xs">{fmtDate(t.startDate)}</td>
+                <td className={`p-2 text-xs ${dateColor}`}>{fmtDate(t.dueDate)}</td>
+                <td className="p-2"><div className="flex flex-wrap gap-0.5">{t.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} />)}</div></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================
+ * Search View
+ * ========================================= */
+function SearchView() {
+  const { state, openTask } = useApp();
+  const [q, setQ] = useState('');
+  const matches = useMemo(() => {
+    if (!q.trim()) return [];
+    const Q = q.toLowerCase();
+    return state.tasks.filter(t => !t.archived && (
+      t.title.toLowerCase().includes(Q) ||
+      (t.description||'').toLowerCase().includes(Q) ||
+      t.comments.some(c => c.text.toLowerCase().includes(Q))
+    ));
+  }, [q, state.tasks]);
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">🔍 検索</h1>
+      <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="タスク・コメントを検索..."
+        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-lg focus:ring-2 focus:ring-blue-500" />
+      <p className="text-sm text-gray-500 mt-2">{q ? `${matches.length}件ヒット` : 'キーワードを入力してください'}</p>
+      <div className="mt-4 space-y-1">
+        {matches.map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />)}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================
+ * Archive View
+ * ========================================= */
+function ArchiveView() {
+  const { state, dispatch } = useApp();
+  const archivedProjects = state.projects.filter(p => p.archived);
+  const archivedTasks = state.tasks.filter(t => t.archived);
+  return (
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <h1 className="text-2xl font-bold">📦 アーカイブ</h1>
+      <Card title={`プロジェクト（${archivedProjects.length}）`}>
+        {archivedProjects.length === 0 && <p className="text-sm text-gray-500">アーカイブされたプロジェクトはありません</p>}
+        {archivedProjects.map(p => <div key={p.id} className="flex items-center justify-between p-2 border-b dark:border-gray-700">
+          <span>{p.icon} {p.name}</span>
+          <div className="flex gap-1">
+            <Btn size="xs" onClick={()=>dispatch({type:'RESTORE_PROJECT',id:p.id})}>復元</Btn>
+            <Btn size="xs" variant="danger" onClick={()=>{if(confirm('完全削除しますか？')){dispatch({type:'DELETE_PROJECT',id:p.id});}}}>完全削除</Btn>
+          </div>
+        </div>)}
+      </Card>
+      <Card title={`タスク（${archivedTasks.length}）`}>
+        {archivedTasks.length === 0 && <p className="text-sm text-gray-500">アーカイブされたタスクはありません</p>}
+        {archivedTasks.map(t => {
+          const proj = state.projects.find(p=>p.id===t.projectId);
+          return <div key={t.id} className="flex items-center justify-between p-2 border-b dark:border-gray-700 text-sm">
+            <span>{proj?.icon} <b className="text-gray-500">#{t.taskNumber}</b> {t.title}</span>
+            <div className="flex gap-1">
+              <Btn size="xs" onClick={()=>dispatch({type:'RESTORE_TASK',id:t.id})}>復元</Btn>
+              <Btn size="xs" variant="danger" onClick={()=>{if(confirm('完全削除？'))dispatch({type:'DELETE_TASK',id:t.id});}}>削除</Btn>
+            </div>
+          </div>;
+        })}
+      </Card>
+    </div>
+  );
+}
+
+/* =========================================
+ * Settings (組織) — メンバー、休日、API Keys
+ * ========================================= */
+function SettingsView() {
+  const { state, dispatch, openModal, currentUser } = useApp();
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  const [tab, setTab] = useState('members');
+
+  const tabs = [
+    { id:'members', label:'👥 メンバー' },
+    { id:'holidays', label:'📅 休日設定' },
+    { id:'profile', label:'🏢 組織プロフィール' },
+    { id:'plan', label:'💳 プラン' },
+  ];
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-6 py-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800">
+        <h1 className="text-2xl font-bold">⚙️ 組織設定</h1>
+      </div>
+      <div className="px-6 pt-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex gap-1">
+        {tabs.map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            className={`px-3 py-2 text-sm rounded-t ${tab===t.id?'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold':'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="p-6 max-w-4xl">
+        {tab==='members' && <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h2 className="font-bold">メンバー一覧（{org.members.length}名）</h2>
+            {currentUser?.role==='admin' && <Btn size="sm" onClick={()=>openModal('newMember')}>+ メンバー追加</Btn>}
+          </div>
+          <table className="w-full text-sm bg-white dark:bg-gray-800 rounded shadow">
+            <thead className="bg-gray-100 dark:bg-gray-700"><tr>
+              <th className="text-left p-2">アバター</th><th className="text-left p-2">名前</th><th className="text-left p-2">メール</th><th className="text-left p-2">権限</th><th></th>
+            </tr></thead>
+            <tbody>
+              {org.members.map(m => <tr key={m.id} className="border-t dark:border-gray-700">
+                <td className="p-2"><Avatar user={m} size={32} /></td>
+                <td className="p-2 font-medium">{m.name}</td>
+                <td className="p-2 text-gray-500">{m.email}</td>
+                <td className="p-2">
+                  {currentUser?.role==='admin' && m.id !== state.currentUserId ? (
+                    <Select value={m.role} onChange={v=>dispatch({type:'UPDATE_ORG_MEMBER',id:m.id,patch:{role:v}})} options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
+                  ) : ORG_ROLES.find(r=>r.id===m.role)?.label}
+                </td>
+                <td className="p-2 text-right">{currentUser?.role==='admin' && m.id !== state.currentUserId &&
+                  <button onClick={()=>{if(confirm('外しますか？')){dispatch({type:'REMOVE_ORG_MEMBER',id:m.id});}}} className="text-red-500 hover:text-red-700 text-xs">外す</button>}</td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>}
+        {tab==='holidays' && <HolidaySettings org={org} />}
+        {tab==='profile' && <OrgProfile org={org} />}
+        {tab==='plan' && <PlanInfo />}
+      </div>
+    </div>
+  );
+}
+
+function HolidaySettings({ org }) {
+  const { dispatch, setMsg } = useApp();
+  const days = ['日','月','火','水','木','金','土'];
+  const [newDate, setNewDate] = useState('');
+  const toggleDay = (d) => {
+    const wo = org.holidays.weeklyOff.includes(d) ? org.holidays.weeklyOff.filter(x=>x!==d) : [...org.holidays.weeklyOff, d];
+    dispatch({type:'SET_HOLIDAYS',patch:{weeklyOff:wo}});
+  };
+  return <div className="space-y-4">
+    <h2 className="font-bold">休日設定（ガントチャートに反映されます）</h2>
+    <div>
+      <h3 className="text-sm font-bold mb-2">定休日</h3>
+      <div className="flex gap-1">{days.map((n,i)=>(
+        <button key={i} onClick={()=>toggleDay(i)}
+          className={`w-12 h-12 rounded ${org.holidays.weeklyOff.includes(i)?'bg-red-500 text-white':'bg-gray-200 dark:bg-gray-700'}`}>{n}</button>
+      ))}</div>
+    </div>
+    <div>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={org.holidays.jpHolidays} onChange={e=>dispatch({type:'SET_HOLIDAYS',patch:{jpHolidays:e.target.checked}})} />
+        日本の祝日を反映する（2025-2027）
+      </label>
+    </div>
+    <div>
+      <h3 className="text-sm font-bold mb-2">カスタム休日</h3>
+      <div className="flex flex-wrap gap-1 mb-2">
+        {org.holidays.customHolidays.map(d => <span key={d} className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-xs">
+          {fmtDate(d)} <button onClick={()=>dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:org.holidays.customHolidays.filter(x=>x!==d)}})} className="ml-1 text-red-500">×</button>
+        </span>)}
+      </div>
+      <div className="flex gap-1">
+        <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="px-2 py-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+        <Btn size="sm" onClick={()=>{ if(newDate && !org.holidays.customHolidays.includes(newDate)){ dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:[...org.holidays.customHolidays,newDate]}}); setNewDate(''); setMsg('休日を追加しました'); } }}>追加</Btn>
+      </div>
+    </div>
+  </div>;
+}
+
+function OrgProfile({ org }) {
+  const { dispatch } = useApp();
+  return <div className="space-y-3">
+    <div>
+      <label className="text-sm font-bold">組織名</label>
+      <Input value={org.name} onChange={v=>dispatch({type:'UPDATE_ORG',patch:{name:v}})} className="max-w-md" />
+    </div>
+    <div>
+      <label className="text-sm font-bold">アイコン</label>
+      <EmojiPicker value={org.icon} onChange={v=>dispatch({type:'UPDATE_ORG',patch:{icon:v}})} options={['🏢','🏭','🏪','🏫','🏛','🏥','🏦','🚀','✨','🎯']} />
+    </div>
+  </div>;
+}
+
+function PlanInfo() {
+  return <div className="space-y-4">
+    <h2 className="font-bold">プラン情報</h2>
+    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-lg">
+      <div className="text-sm opacity-80">現在のプラン</div>
+      <div className="text-3xl font-bold mt-1">デモ プラン</div>
+      <div className="mt-3 text-sm">全機能をお試しいただけます。LocalStorage に保存されます。</div>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+        <h3 className="font-bold">フリー</h3>
+        <p className="text-xs text-gray-500 mt-1">1ユーザー、ガントチャート可</p>
+      </div>
+      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+        <h3 className="font-bold">スタンダード</h3>
+        <p className="text-xs text-gray-500 mt-1">CSV/API、5GB/license</p>
+      </div>
+      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+        <h3 className="font-bold">ビジネス</h3>
+        <p className="text-xs text-gray-500 mt-1">SSO/SLA、10GB/license</p>
+      </div>
+      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+        <h3 className="font-bold">タスクDX</h3>
+        <p className="text-xs text-gray-500 mt-1">人数無制限、専任サポート</p>
+      </div>
+    </div>
+  </div>;
+}
+
+/* =========================================
+ * Project Settings (members, labels, lists)
+ * ========================================= */
+function ProjectSettingsView() {
+  const { state, dispatch, openModal } = useApp();
+  const proj = state.projects.find(p => p.id===state.selectedProjectId);
+  const org = state.organizations.find(o => o.id===proj?.orgId);
+  if (!proj) return null;
+  const [tab, setTab] = useState('members');
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-6 py-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
+        <h1 className="text-xl font-bold">{proj.icon} {proj.name} の設定</h1>
+        <Btn size="sm" variant="outline" onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>← ボードに戻る</Btn>
+      </div>
+      <div className="px-6 pt-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex gap-1">
+        {[
+          {id:'members',label:'👥 メンバー'},
+          {id:'labels',label:'🏷 ラベル'},
+          {id:'lists',label:'📋 リスト'},
+          {id:'general',label:'⚙️ 一般'},
+        ].map(t => (
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            className={`px-3 py-2 text-sm rounded-t ${tab===t.id?'bg-blue-100 dark:bg-blue-900/30 text-blue-700':'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="p-6 max-w-4xl space-y-3">
+        {tab==='members' && <ProjMembers proj={proj} org={org} />}
+        {tab==='labels' && <ProjLabels proj={proj} />}
+        {tab==='lists' && <ProjLists proj={proj} />}
+        {tab==='general' && <ProjGeneral proj={proj} />}
+      </div>
+    </div>
+  );
+}
+
+function ProjMembers({ proj, org }) {
+  const { dispatch } = useApp();
+  const [showAdd, setShowAdd] = useState(false);
+  const candidates = org.members.filter(m => !proj.members.find(pm => pm.userId===m.id));
+  return <div className="space-y-3">
+    <div className="flex justify-between"><h2 className="font-bold">プロジェクトメンバー（{proj.members.length}）</h2>
+      {candidates.length>0 && <Btn size="sm" onClick={()=>setShowAdd(!showAdd)}>+ 追加</Btn>}
+    </div>
+    {showAdd && <div className="p-2 border dark:border-gray-700 rounded">
+      {candidates.map(m => <button key={m.id} onClick={()=>{dispatch({type:'ADD_PROJECT_MEMBER',projectId:proj.id,userId:m.id,role:'member'}); setShowAdd(false);}}
+        className="block w-full text-left px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+        <Avatar user={m} size={20} /> {m.name}
+      </button>)}
+    </div>}
+    <table className="w-full text-sm bg-white dark:bg-gray-800 rounded shadow">
+      <thead className="bg-gray-100 dark:bg-gray-700"><tr><th className="text-left p-2">名前</th><th className="text-left p-2">権限</th><th></th></tr></thead>
+      <tbody>{proj.members.map(m => {
+        const u = userById(org, m.userId);
+        return <tr key={m.userId} className="border-t dark:border-gray-700">
+          <td className="p-2"><Avatar user={u} size={24} /> {u?.name}</td>
+          <td className="p-2"><Select value={m.role} onChange={v=>dispatch({type:'UPDATE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId,role:v})} options={PROJECT_ROLES.map(r=>({value:r.id,label:r.label}))} /></td>
+          <td className="p-2 text-right"><button onClick={()=>{if(confirm('外しますか？')){dispatch({type:'REMOVE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId});}}} className="text-red-500 text-xs">外す</button></td>
+        </tr>;
+      })}</tbody>
+    </table>
+  </div>;
+}
+
+function ProjLabels({ proj }) {
+  const { dispatch } = useApp();
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('blue');
+  return <div className="space-y-3">
+    <h2 className="font-bold">ラベル（{proj.labels.length}/50）</h2>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {proj.labels.map(l => (
+        <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded shadow">
+          <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{name:v}})} />
+          <ColorPicker value={l.color} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{color:v}})} options={LABEL_COLORS.map(c=>c.id)} />
+          <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_LABEL',projectId:proj.id,labelId:l.id});}} className="text-red-500 px-2">🗑</button>
+        </div>
+      ))}
+    </div>
+    {proj.labels.length < 50 && <div className="p-3 border dark:border-gray-700 rounded space-y-2">
+      <h3 className="text-sm font-bold">新しいラベル</h3>
+      <Input value={name} onChange={setName} placeholder="ラベル名" />
+      <ColorPicker value={color} onChange={setColor} options={LABEL_COLORS.map(c=>c.id)} />
+      <Btn size="sm" onClick={()=>{if(name.trim()){dispatch({type:'ADD_LABEL',projectId:proj.id,name:name.trim(),color}); setName('');}}}>追加</Btn>
+    </div>}
+  </div>;
+}
+
+function ProjLists({ proj }) {
+  const { dispatch } = useApp();
+  return <div className="space-y-2">
+    <h2 className="font-bold">リスト一覧</h2>
+    {[...proj.lists].sort((a,b)=>a.order-b.order).map(l => (
+      <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded shadow">
+        <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{name:v}})} />
+        <Select value={l.autoStatus||''} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{autoStatus:v||null}})} options={[
+          {value:'',label:'ステータス自動: なし'},
+          ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
+        ]} />
+        <button onClick={()=>{if(confirm('削除？タスクはアーカイブされます'))dispatch({type:'DELETE_LIST',projectId:proj.id,listId:l.id});}} className="text-red-500 px-2">🗑</button>
+      </div>
+    ))}
+  </div>;
+}
+
+function ProjGeneral({ proj }) {
+  const { dispatch, setMsg } = useApp();
+  return <div className="space-y-3">
+    <div>
+      <label className="text-sm font-bold">プロジェクト名</label>
+      <Input value={proj.name} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{name:v}})} />
+    </div>
+    <div>
+      <label className="text-sm font-bold">アイコン</label>
+      <EmojiPicker value={proj.icon} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{icon:v}})} options={PROJECT_ICONS} />
+    </div>
+    <div className="border-t dark:border-gray-700 pt-3 space-y-1">
+      <Btn variant="outline" onClick={()=>{dispatch({type:'DUPLICATE_PROJECT',id:proj.id}); setMsg('プロジェクトを複製しました');}}>📋 プロジェクトを複製</Btn>
+      <Btn variant="outline" onClick={()=>{if(confirm('アーカイブしますか？')){dispatch({type:'ARCHIVE_PROJECT',id:proj.id});dispatch({type:'SET_VIEW',view:'dashboard'});}}}>📦 アーカイブ</Btn>
+    </div>
+  </div>;
+}
+
+/* =========================================
+ * Automation / API / Webhook
+ * ========================================= */
+function AutomationView() {
+  const { state, dispatch, setMsg } = useApp();
+  const [whName, setWhName] = useState(''); const [whUrl, setWhUrl] = useState('');
+  const [keyName, setKeyName] = useState('');
+  return <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <h1 className="text-2xl font-bold">🔌 API・自動化</h1>
+
+    <Card title="🔗 Webhook">
+      <p className="text-sm text-gray-500 mb-3">タスク作成・移動・コメント等のイベントを外部URLに送信します（Slack / Teams / 独自エンドポイント）</p>
+      <div className="space-y-2">
+        {state.automation.webhooks.map(w => (
+          <div key={w.id} className="flex items-center gap-2 p-2 border dark:border-gray-700 rounded">
+            <input type="checkbox" checked={w.enabled} onChange={()=>dispatch({type:'TOGGLE_WEBHOOK',id:w.id})} />
+            <div className="flex-1">
+              <div className="font-medium">{w.name}</div>
+              <div className="text-xs text-gray-500 truncate">{w.url}</div>
+              <div className="text-xs text-blue-600">{w.events.join(', ')}</div>
+            </div>
+            <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_WEBHOOK',id:w.id});}} className="text-red-500">🗑</button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 p-3 border dark:border-gray-700 rounded space-y-2">
+        <h4 className="text-sm font-bold">新規 Webhook</h4>
+        <Input value={whName} onChange={setWhName} placeholder="名前 (例: Slack #general)" />
+        <Input value={whUrl} onChange={setWhUrl} placeholder="https://hooks.slack.com/..." />
+        <Btn size="sm" onClick={()=>{ if(whName && whUrl){dispatch({type:'ADD_WEBHOOK',patch:{name:whName,url:whUrl,events:['task_created','task_moved','comment']}}); setWhName('');setWhUrl(''); setMsg('Webhookを追加しました');} }}>追加</Btn>
+      </div>
+    </Card>
+
+    <Card title="🔑 API キー">
+      <p className="text-sm text-gray-500 mb-3">REST API でタスクの取得・作成・更新ができます。<code>X-Jooto-Api-Key</code> ヘッダーで認証。</p>
+      <div className="space-y-1">
+        {state.apiKeys.map(k => (
+          <div key={k.id} className="flex items-center gap-2 p-2 border dark:border-gray-700 rounded">
+            <span className="flex-1">
+              <div className="font-medium text-sm">{k.name}</div>
+              <code className="text-xs text-gray-500">{k.key}</code>
+            </span>
+            <button onClick={()=>{navigator.clipboard.writeText(k.key); setMsg('コピーしました');}} className="text-blue-600 text-xs">コピー</button>
+            <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_API_KEY',id:k.id});}} className="text-red-500">🗑</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 mt-3">
+        <Input value={keyName} onChange={setKeyName} placeholder="キー名 (例: GitHub Actions)" />
+        <Btn size="sm" onClick={()=>{if(keyName){dispatch({type:'ADD_API_KEY',name:keyName}); setKeyName('');setMsg('APIキーを発行しました');}}}>+ 発行</Btn>
+      </div>
+    </Card>
+
+    <Card title="📚 API ドキュメント（抜粋）">
+      <div className="space-y-2 text-sm">
+        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
+          <div className="text-green-600 font-bold">GET /api/v1/tasks</div>
+          <div className="text-gray-500">タスク一覧を取得</div>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
+          <div className="text-blue-600 font-bold">POST /api/v1/tasks</div>
+          <div className="text-gray-500">タスクを新規作成</div>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
+          <div className="text-yellow-600 font-bold">PUT /api/v1/tasks/:id</div>
+          <div className="text-gray-500">タスクを更新</div>
+        </div>
+        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
+          <div className="text-red-600 font-bold">DELETE /api/v1/tasks/:id</div>
+          <div className="text-gray-500">タスクを削除</div>
+        </div>
+        <p className="text-xs text-gray-500">※ 本デモではエンドポイントは実装されていません（API設計のみ表示）</p>
+      </div>
+    </Card>
+  </div>;
+}
+
+/* =========================================
+ * AI View
+ * ========================================= */
+function AIView() {
+  const { state, dispatch, setMsg, openModal } = useApp();
+  const [prompt, setPrompt] = useState('');
+  const [target, setTarget] = useState(state.selectedProjectId);
+  const [diagnosis, setDiagnosis] = useState(null);
+  const [diagTask, setDiagTask] = useState('');
+
+  const generate = () => {
+    if (prompt.trim() && target){
+      dispatch({type:'AI_GENERATE_TASKS', projectId: target, prompt: prompt.trim()});
+      setMsg('AIが6件のタスクを自動生成しました'); setPrompt('');
+    }
+  };
+  const diagnose = () => {
+    const t = state.tasks.find(x => x.id===diagTask);
+    if (!t) return;
+    const tone = state.aiSettings.feedbackTone;
+    const detail = state.aiSettings.summaryDetail;
+    const proj = state.projects.find(p => p.id===t.projectId);
+    const list = proj?.lists.find(l => l.id===t.listId);
+    const lines = [];
+    if (detail >= 1) lines.push(`「${t.title}」は ${proj?.name} の「${list?.name}」リストにあります。`);
+    if (detail >= 2) lines.push(`現在のステータスは「${statusObj(t.status).label}」、コメント数 ${t.comments.length} 件、チェックリスト ${t.checklist.length} 件中 ${t.checklist.filter(c=>c.done).length} 件完了。`);
+    if (detail >= 3) lines.push(`期間は ${t.startDate||'未設定'} 〜 ${t.dueDate||'未設定'}。${t.dueDate && isPastDate(t.dueDate) && t.status!=='completed' ? '⚠ 期限を過ぎています。' : ''}`);
+    if (detail >= 4) lines.push(`担当者は ${t.assignees.length} 名、フォロワーは ${t.followers.length} 名で、活発さは ${t.comments.length > 3 ? '高' : '中'}と評価できます。`);
+    if (detail >= 5) lines.push(`このタスクの全体的な進捗状況、コメントの内容、メンバー間のやり取りを総合的に分析しました。`);
+    const toneText = ['とても優しく：','優しく：','中立的に：','やや厳しく：','厳しく：'][tone-1] || '';
+    let fb = '';
+    if (t.status==='completed') fb = `${toneText}よく完了されました。次回も同じ調子で進めましょう。`;
+    else if (t.dueDate && isPastDate(t.dueDate)) fb = `${toneText}期限を過ぎています。優先度の見直しか、期限の再設定が必要かもしれません。`;
+    else if (t.comments.length === 0) fb = `${toneText}コメントによるコミュニケーションが少なめです。チームで状況を共有しましょう。`;
+    else fb = `${toneText}順調に進んでいます。このまま継続しましょう。`;
+    setDiagnosis({ summary: lines.join(' '), feedback: fb });
+  };
+
+  return <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <h1 className="text-2xl font-bold">🤖 AI機能</h1>
+    <Card title="🪄 AIタスク生成β">
+      <p className="text-sm text-gray-500 mb-3">プロジェクト概要を入力すると、AIが必要なタスクを自動でカンバンに展開します</p>
+      <Select value={target} onChange={setTarget} options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} className="mb-2 w-full" />
+      <Textarea value={prompt} onChange={setPrompt} placeholder="例: ECサイトのリニューアルプロジェクト" rows={3} />
+      <Btn className="mt-2" onClick={generate}>✨ 生成する</Btn>
+    </Card>
+
+    <Card title="🩺 AIタスク診断">
+      <p className="text-sm text-gray-500 mb-3">タスクのコメント・進捗・担当者・期限を分析し、要約とフィードバックを生成します</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label className="text-xs font-bold text-gray-500">要約の粒度（1=簡潔 / 5=詳細）</label>
+          <input type="range" min="1" max="5" value={state.aiSettings.summaryDetail} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{summaryDetail:+e.target.value}})} className="w-full" />
+          <div className="text-center text-xs">{state.aiSettings.summaryDetail}</div>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-gray-500">フィードバック口調（1=優しい / 5=厳しい）</label>
+          <input type="range" min="1" max="5" value={state.aiSettings.feedbackTone} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{feedbackTone:+e.target.value}})} className="w-full" />
+          <div className="text-center text-xs">{state.aiSettings.feedbackTone}</div>
+        </div>
+      </div>
+      <Select value={diagTask} onChange={setDiagTask} className="w-full mb-2"
+        options={[{value:'',label:'タスクを選択...'},...state.tasks.filter(t=>!t.archived).map(t=>({value:t.id,label:`#${t.taskNumber} ${t.title}`}))]} />
+      <Btn onClick={diagnose}>🔍 診断する</Btn>
+      {diagnosis && <div className="mt-4 space-y-3">
+        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded">
+          <h4 className="font-bold text-sm">📊 要約</h4>
+          <p className="text-sm mt-1">{diagnosis.summary}</p>
+        </div>
+        <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded">
+          <h4 className="font-bold text-sm">💡 フィードバック</h4>
+          <p className="text-sm mt-1">{diagnosis.feedback}</p>
+        </div>
+      </div>}
+    </Card>
+  </div>;
+}
+
+/* =========================================
+ * History View
+ * ========================================= */
+function HistoryView() {
+  const { state, openTask } = useApp();
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  return <div className="p-6 max-w-4xl mx-auto">
+    <h1 className="text-2xl font-bold mb-4">📜 行動履歴</h1>
+    <div className="bg-white dark:bg-gray-800 rounded shadow divide-y dark:divide-gray-700">
+      {state.history.length === 0 && <p className="p-4 text-sm text-gray-500">履歴はまだありません</p>}
+      {state.history.slice(0,200).map(h => {
+        const u = userById(org, h.userId);
+        const proj = state.projects.find(p => p.id===h.projectId);
+        return <div key={h.id} className="p-3 flex items-start gap-2">
+          <Avatar user={u} size={28} />
+          <div className="flex-1">
+            <div className="text-sm">{u?.name} が {proj && <span className="text-blue-600">[{proj.icon} {proj.name}]</span>} {h.text}</div>
+            <div className="text-xs text-gray-500">{fmtDateTime(h.ts)}</div>
+          </div>
+          {h.taskId && <button onClick={()=>openTask(h.taskId)} className="text-xs text-blue-600 hover:underline">表示</button>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/* =========================================
+ * New Project Modal
+ * ========================================= */
+function NewProjectModal({ onClose }) {
+  const { dispatch, setMsg } = useApp();
+  const [name, setName] = useState('');
+  const [icon, setIcon] = useState('📋');
+  const [color, setColor] = useState('blue');
+  const [template, setTemplate] = useState('default');
+  const templates = {
+    default: [{ name:'未着手', autoStatus:'not_started' },{ name:'進行中', autoStatus:'in_progress' },{ name:'完了', autoStatus:'completed' }],
+    dev:     [{ name:'バックログ', autoStatus:'not_started' },{ name:'設計', autoStatus:'in_progress' },{ name:'開発中', autoStatus:'in_progress' },{ name:'レビュー', autoStatus:'on_hold' },{ name:'リリース完了', autoStatus:'completed' }],
+    sales:   [{ name:'リード', autoStatus:'not_started' },{ name:'初回商談', autoStatus:'in_progress' },{ name:'提案中', autoStatus:'in_progress' },{ name:'クロージング', autoStatus:'on_hold' },{ name:'受注', autoStatus:'completed' },{ name:'失注', autoStatus:'cancelled' }],
+    marketing:[{ name:'企画', autoStatus:'not_started' },{ name:'制作', autoStatus:'in_progress' },{ name:'入稿待ち', autoStatus:'on_hold' },{ name:'配信中', autoStatus:'in_progress' },{ name:'完了', autoStatus:'completed' }],
+    pr:      [{ name:'取材依頼', autoStatus:'not_started' },{ name:'準備中', autoStatus:'in_progress' },{ name:'取材実施', autoStatus:'in_progress' },{ name:'記事化', autoStatus:'on_hold' },{ name:'配信完了', autoStatus:'completed' }],
+  };
+  const submit = () => {
+    if (!name.trim()) return;
+    dispatch({ type:'ADD_PROJECT', name: name.trim(), icon, color, lists: templates[template] });
+    setMsg('プロジェクトを作成しました');
+    onClose();
+  };
+  return <Modal open onClose={onClose} title="新しいプロジェクト" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>作成</Btn></>}>
+    <div className="space-y-3">
+      <div><label className="text-sm font-bold">プロジェクト名</label><Input value={name} onChange={setName} placeholder="例: 新サイト立ち上げ" /></div>
+      <div><label className="text-sm font-bold">アイコン</label><EmojiPicker value={icon} onChange={setIcon} options={PROJECT_ICONS} /></div>
+      <div><label className="text-sm font-bold">カラー</label><ColorPicker value={color} onChange={setColor} options={PROJECT_COLORS} /></div>
+      <div>
+        <label className="text-sm font-bold">テンプレート</label>
+        <Select value={template} onChange={setTemplate} className="w-full" options={[
+          {value:'default',label:'シンプル（未着手/進行中/完了）'},
+          {value:'dev',label:'開発（バックログ/設計/開発/レビュー/完了）'},
+          {value:'sales',label:'営業（リード→受注フロー）'},
+          {value:'marketing',label:'マーケティング（企画→配信フロー）'},
+          {value:'pr',label:'広報（取材→配信フロー）'},
+        ]} />
+      </div>
+    </div>
+  </Modal>;
+}
+
+function NewListModal({ onClose }) {
+  const { state, dispatch } = useApp();
+  const [name, setName] = useState('');
+  const [autoStatus, setAutoStatus] = useState('');
+  return <Modal open onClose={onClose} size="sm" title="新しいリスト" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name.trim()){dispatch({type:'ADD_LIST',projectId:state.selectedProjectId,name:name.trim(),autoStatus:autoStatus||null});onClose();}}}>追加</Btn></>}>
+    <div className="space-y-2">
+      <Input value={name} onChange={setName} placeholder="リスト名" />
+      <Select value={autoStatus} onChange={setAutoStatus} className="w-full" options={[
+        {value:'',label:'ステータス自動変更: なし'},
+        ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
+      ]} />
+    </div>
+  </Modal>;
+}
+
+function NewMemberModal({ onClose }) {
+  const { dispatch, setMsg } = useApp();
+  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [role, setRole] = useState('staff'); const [avatar, setAvatar] = useState('👤');
+  return <Modal open onClose={onClose} size="sm" title="メンバーを追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name && email){dispatch({type:'ADD_ORG_MEMBER',name,email,role,avatar}); setMsg('メンバーを追加'); onClose();}}}>追加</Btn></>}>
+    <div className="space-y-2">
+      <Input value={name} onChange={setName} placeholder="名前" />
+      <Input value={email} onChange={setEmail} placeholder="メール" type="email" />
+      <Select value={role} onChange={setRole} options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
+      <div><label className="text-xs">アバター</label><EmojiPicker value={avatar} onChange={setAvatar} options={AVATAR_EMOJIS} /></div>
+    </div>
+  </Modal>;
+}
+
+function NewBookmarkModal({ onClose }) {
+  const { dispatch } = useApp();
+  const [title, setTitle] = useState(''); const [url, setUrl] = useState('');
+  return <Modal open onClose={onClose} size="sm" title="ブックマーク追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&url){dispatch({type:'ADD_BOOKMARK',title,url}); onClose();}}}>追加</Btn></>}>
+    <div className="space-y-2">
+      <Input value={title} onChange={setTitle} placeholder="タイトル" />
+      <Input value={url} onChange={setUrl} placeholder="https://..." />
+    </div>
+  </Modal>;
+}
+
+function NewAnnouncementModal({ onClose }) {
+  const { dispatch } = useApp();
+  const [title, setTitle] = useState(''); const [body, setBody] = useState('');
+  return <Modal open onClose={onClose} title="掲示板に投稿" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&body){dispatch({type:'ADD_ANNOUNCEMENT',title,body}); onClose();}}}>投稿</Btn></>}>
+    <div className="space-y-2">
+      <Input value={title} onChange={setTitle} placeholder="タイトル" />
+      <Textarea value={body} onChange={setBody} placeholder="本文（マークダウン対応）" rows={6} />
+    </div>
+  </Modal>;
+}
+
+function ImportCSVModal({ onClose }) {
+  const { state, dispatch, setMsg } = useApp();
+  const [projectId, setProjectId] = useState(state.selectedProjectId);
+  const [text, setText] = useState('リスト,タイトル,説明,開始日,締切日\n未着手,サンプル1,説明テキスト,2026-05-10,2026-05-15');
+  const submit = () => {
+    const lines = text.trim().split('\n').filter(Boolean);
+    if (lines.length < 2) { setMsg('データが不足しています'); return; }
+    const headers = lines[0].split(',').map(h => h.trim());
+    const rows = lines.slice(1).map(line => {
+      const cells = parseCsvLine(line);
+      const o = {};
+      headers.forEach((h,i) => { o[h] = cells[i]||''; });
+      return { list: o['リスト']||o['list']||'未分類', title: o['タイトル']||o['title']||'', description: o['説明']||o['description']||'', startDate: o['開始日']||o['startDate']||null, dueDate: o['締切日']||o['dueDate']||null };
+    });
+    dispatch({type:'IMPORT_CSV_TASKS', projectId, rows});
+    setMsg(`${rows.length}件のタスクをインポートしました`);
+    onClose();
+  };
+  return <Modal open onClose={onClose} title="CSV インポート" size="lg" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>インポート</Btn></>}>
+    <div className="space-y-2">
+      <Select value={projectId} onChange={setProjectId} className="w-full" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
+      <p className="text-xs text-gray-500">1行目はヘッダー: リスト, タイトル, 説明, 開始日, 締切日</p>
+      <Textarea value={text} onChange={setText} rows={10} className="font-mono text-xs" />
+      <div>
+        <input type="file" accept=".csv,.txt" onChange={e=>{
+          const f = e.target.files[0]; if (!f) return;
+          const r = new FileReader(); r.onload = ev => setText(ev.target.result); r.readAsText(f, 'UTF-8');
+        }} />
+      </div>
+    </div>
+  </Modal>;
+}
+function parseCsvLine(line) {
+  const result = []; let cur = ''; let inQ = false;
+  for (let i=0; i<line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c==='"' && line[i+1]==='"') { cur+='"'; i++; }
+      else if (c==='"') inQ = false;
+      else cur += c;
+    } else {
+      if (c===',') { result.push(cur); cur=''; }
+      else if (c==='"') inQ = true;
+      else cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function AIGenerateModal({ onClose }) {
+  const { state, dispatch, setMsg } = useApp();
+  const [projectId, setProjectId] = useState(state.selectedProjectId);
+  const [prompt, setPrompt] = useState('');
+  return <Modal open onClose={onClose} title="🤖 AIでタスクを自動生成" size="md" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(prompt&&projectId){dispatch({type:'AI_GENERATE_TASKS',projectId,prompt}); setMsg('タスクを生成しました'); onClose();}}}>✨ 生成</Btn></>}>
+    <div className="space-y-2">
+      <p className="text-sm text-gray-500">プロジェクト概要を入力すると、AIが必要なタスクを自動展開します</p>
+      <Select value={projectId} onChange={setProjectId} className="w-full" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
+      <Textarea value={prompt} onChange={setPrompt} placeholder="例: 新製品ローンチに向けた告知キャンペーン" rows={3} />
+    </div>
+  </Modal>;
+}
+
+function SwitchOrgModal({ onClose }) {
+  const { state } = useApp();
+  return <Modal open onClose={onClose} title="組織" size="sm">
+    <div className="space-y-1">
+      {state.organizations.map(o => (
+        <div key={o.id} className="p-3 rounded border dark:border-gray-700 flex items-center gap-2">
+          <span className="text-2xl">{o.icon}</span>
+          <div className="flex-1">
+            <div className="font-medium">{o.name}</div>
+            <div className="text-xs text-gray-500">{o.members.length}名</div>
+          </div>
+          {o.id===state.currentOrgId && <span className="text-xs text-blue-600">使用中</span>}
+        </div>
+      ))}
+      <p className="text-xs text-gray-500 mt-2">※ デモのため複数組織の作成は省略しています</p>
+    </div>
+  </Modal>;
+}
+
+/* =========================================
+ * Main App
+ * ========================================= */
+function App() {
+  const [state, dispatch] = useReducer(reducer, null, () => loadState() ?? seedData());
+  const [openTaskId, setOpenTaskId] = useState(null);
+  const [modalName, setModalName] = useState(null);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => { saveState(state); }, [state]);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', state.darkMode);
+  }, [state.darkMode]);
+  useEffect(() => {
+    if (msg) { const t = setTimeout(()=>setMsg(null), 2000); return () => clearTimeout(t); }
+  }, [msg]);
+
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+  const currentUser = userById(org, state.currentUserId);
+
+  const ctx = {
+    state, dispatch,
+    openTask: (id) => setOpenTaskId(id),
+    openModal: (name) => setModalName(name),
+    setMsg,
+    currentUser,
+  };
+
+  const renderView = () => {
+    switch (state.view) {
+      case 'dashboard': return <Dashboard />;
+      case 'all-tasks': return <AllTasksView />;
+      case 'all-gantt': return <div className="flex-1 flex flex-col">
+        <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800"><h2 className="text-xl font-bold">📅 全てのガントチャート</h2></div>
+        <GanttView allProjects />
+      </div>;
+      case 'archive': return <ArchiveView />;
+      case 'search': return <SearchView />;
+      case 'settings': return <SettingsView />;
+      case 'automation': return <AutomationView />;
+      case 'ai': return <AIView />;
+      case 'history': return <HistoryView />;
+      case 'gantt': return <div className="flex-1 flex flex-col">
+        <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
+          {(() => { const p = state.projects.find(p => p.id===state.selectedProjectId); return p ? <h2 className="text-xl font-bold">{p.icon} {p.name} - ガント</h2> : null; })()}
+          <div className="ml-auto flex gap-1">
+            <Btn size="sm" variant="outline" onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>カンバンへ</Btn>
+          </div>
+        </div>
+        <GanttView projectId={state.selectedProjectId} />
+      </div>;
+      case 'project-settings': return <ProjectSettingsView />;
+      case 'board':
+      default:
+        return <Board />;
+    }
+  };
+
+  return (
+    <AppCtx.Provider value={ctx}>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <TopBar />
+          <div className="flex-1 overflow-hidden flex flex-col">{renderView()}</div>
+        </div>
+      </div>
+      {openTaskId && <TaskModal taskId={openTaskId} onClose={()=>setOpenTaskId(null)} />}
+      {modalName==='newProject' && <NewProjectModal onClose={()=>setModalName(null)} />}
+      {modalName==='newList' && <NewListModal onClose={()=>setModalName(null)} />}
+      {modalName==='newMember' && <NewMemberModal onClose={()=>setModalName(null)} />}
+      {modalName==='newBookmark' && <NewBookmarkModal onClose={()=>setModalName(null)} />}
+      {modalName==='newAnnouncement' && <NewAnnouncementModal onClose={()=>setModalName(null)} />}
+      {modalName==='import' && <ImportCSVModal onClose={()=>setModalName(null)} />}
+      {modalName==='aiGenerate' && <AIGenerateModal onClose={()=>setModalName(null)} />}
+      {modalName==='switchOrg' && <SwitchOrgModal onClose={()=>setModalName(null)} />}
+      <Toast msg={msg} />
+    </AppCtx.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
