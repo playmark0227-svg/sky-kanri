@@ -3,12 +3,35 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Jooto Clone - タスク・プロジェクト管理ツール</title>
+<title>sky-kanri | チームの進行を整理する</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
+  const _palette = ['indigo','sky','teal','emerald','amber','orange','rose','purple','slate','stone','pink','red','yellow','green','blue','gray'];
+  const _safe = [];
+  _palette.forEach(c => {
+    [100,200,300,400,500,600,700,800,900].forEach(s => { _safe.push(`bg-${c}-${s}`); _safe.push(`text-${c}-${s}`); _safe.push(`border-${c}-${s}`); });
+  });
   tailwind.config = {
     darkMode: 'class',
-    theme: { extend: { fontFamily: { sans: ['"Hiragino Kaku Gothic ProN"','"Yu Gothic"','Meiryo','sans-serif'] } } }
+    safelist: _safe,
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter','"Noto Sans JP"','"Hiragino Kaku Gothic ProN"','"Yu Gothic"','sans-serif'],
+        },
+        colors: {
+          ink: { 50:'#f8fafc',100:'#f1f5f9',200:'#e2e8f0',300:'#cbd5e1',400:'#94a3b8',500:'#64748b',600:'#475569',700:'#334155',800:'#1e293b',900:'#0f172a' },
+          accent: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' },
+        },
+        boxShadow: {
+          card: '0 1px 2px rgba(15,23,42,0.04), 0 1px 1px rgba(15,23,42,0.03)',
+          pop: '0 8px 24px -4px rgba(15,23,42,0.12), 0 2px 6px rgba(15,23,42,0.06)',
+        },
+      }
+    }
   };
 </script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -17,36 +40,55 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   html, body, #root { height: 100%; }
-  body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif; }
-  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.4); border-radius: 4px; }
+  body {
+    font-family: 'Inter','Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    font-feature-settings: "palt";
+    -webkit-font-smoothing: antialiased;
+    color: #0f172a;
+  }
+  .dark body { color: #e2e8f0; }
+  button, input, textarea, select { font-family: inherit; }
+  .scrollbar-thin::-webkit-scrollbar { width: 10px; height: 10px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.32); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background-color: rgba(100,116,139,0.55); }
   .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-  .drag-over { outline: 2px dashed #3b82f6; outline-offset: -2px; background: rgba(59,130,246,0.05); }
-  .card-dragging { opacity: 0.4; }
-  .gantt-bar { transition: all 0.15s; }
-  .gantt-bar:hover { filter: brightness(1.1); }
-  .markdown h1 { font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0; }
-  .markdown h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5rem 0; }
-  .markdown h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4rem 0; }
-  .markdown ul { list-style: disc; padding-left: 1.5rem; margin: 0.4rem 0; }
-  .markdown ol { list-style: decimal; padding-left: 1.5rem; margin: 0.4rem 0; }
-  .markdown p { margin: 0.4rem 0; }
-  .markdown code { background: rgba(120,120,120,0.2); padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em; }
-  .markdown pre { background: rgba(120,120,120,0.15); padding: 0.7rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0; }
-  .markdown a { color: #3b82f6; text-decoration: underline; }
-  .markdown blockquote { border-left: 3px solid #9ca3af; padding-left: 0.7rem; color: #6b7280; margin: 0.4rem 0; }
-  .label-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-  .toast { animation: slideIn 0.2s ease-out; }
-  @keyframes slideIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-  .modal-backdrop { animation: fadeIn 0.15s ease-out; }
+  .drag-over { outline: 1.5px dashed #6366f1; outline-offset: -3px; background: rgba(99,102,241,0.04); }
+  .card-dragging { opacity: 0.35; }
+  .gantt-bar { transition: filter 0.12s, transform 0.12s; }
+  .gantt-bar:hover { filter: brightness(1.07); }
+  .markdown h1 { font-size: 1.4rem; font-weight: 700; margin: 0.7rem 0 0.4rem; letter-spacing: -0.01em; }
+  .markdown h2 { font-size: 1.15rem; font-weight: 700; margin: 0.6rem 0 0.3rem; }
+  .markdown h3 { font-size: 1rem; font-weight: 600; margin: 0.5rem 0 0.2rem; }
+  .markdown ul { list-style: disc; padding-left: 1.4rem; margin: 0.4rem 0; }
+  .markdown ol { list-style: decimal; padding-left: 1.4rem; margin: 0.4rem 0; }
+  .markdown p { margin: 0.35rem 0; line-height: 1.7; }
+  .markdown code { background: rgba(100,116,139,0.16); padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.88em; font-family: 'SF Mono','Menlo',monospace; }
+  .markdown pre { background: rgba(15,23,42,0.04); padding: 0.7rem 0.9rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0; }
+  .dark .markdown pre { background: rgba(255,255,255,0.04); }
+  .markdown a { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
+  .markdown blockquote { border-left: 3px solid #cbd5e1; padding-left: 0.8rem; color: #64748b; margin: 0.4rem 0; }
+  .label-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 1.6; letter-spacing: 0.01em; }
+  .toast { animation: slideIn 0.18s ease-out; }
+  @keyframes slideIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-backdrop { animation: fadeIn 0.12s ease-out; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .modal-content { animation: scaleIn 0.15s ease-out; }
-  @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .priority-high { background: linear-gradient(90deg, #ef4444, #dc2626); }
-  .selected-card { box-shadow: 0 0 0 2px #3b82f6; }
+  .modal-content { animation: scaleIn 0.12s ease-out; }
+  @keyframes scaleIn { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .selected-card { box-shadow: 0 0 0 2px #6366f1; }
+  .num { font-feature-settings: "tnum"; }
+  .hairline { border: 1px solid rgba(15,23,42,0.07); }
+  .dark .hairline { border-color: rgba(255,255,255,0.08); }
+  /* sky-kanri logo */
+  .sk-logo {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 7px;
+    background: linear-gradient(135deg, #4f46e5 0%, #6366f1 60%, #818cf8 100%);
+    color: white; font-weight: 700; font-size: 13px; letter-spacing: -0.04em;
+    box-shadow: 0 1px 2px rgba(79,70,229,0.35), inset 0 -1px 0 rgba(255,255,255,0.18);
+  }
 </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+<body class="bg-ink-50 dark:bg-ink-900 text-ink-900 dark:text-ink-100">
 <div id="root"></div>
 <script type="text/babel" data-presets="env,react">
 const { useState, useEffect, useReducer, useCallback, useMemo, useRef, createContext, useContext, Fragment } = React;
@@ -55,11 +97,11 @@ const { useState, useEffect, useReducer, useCallback, useMemo, useRef, createCon
  * Constants
  * ========================================= */
 const STATUSES = [
-  { id: 'not_started', label: '未着手', color: 'bg-gray-400', text: 'text-gray-700', dot: 'bg-gray-400' },
-  { id: 'in_progress', label: '進行中', color: 'bg-blue-500', text: 'text-blue-700', dot: 'bg-blue-500' },
-  { id: 'completed',   label: '完了',   color: 'bg-green-500',text: 'text-green-700', dot: 'bg-green-500' },
-  { id: 'on_hold',     label: '保留',   color: 'bg-yellow-500',text:'text-yellow-700',dot: 'bg-yellow-500' },
-  { id: 'cancelled',   label: '中止',   color: 'bg-red-500',  text: 'text-red-700',  dot: 'bg-red-500' },
+  { id: 'not_started', label: '未着手', color: 'bg-ink-400',     text: 'text-ink-700',    dot: 'bg-ink-400' },
+  { id: 'in_progress', label: '進行中', color: 'bg-accent-600',  text: 'text-accent-700', dot: 'bg-accent-600' },
+  { id: 'completed',   label: '完了',   color: 'bg-emerald-600', text: 'text-emerald-700',dot: 'bg-emerald-600' },
+  { id: 'on_hold',     label: '保留',   color: 'bg-amber-500',   text: 'text-amber-700',  dot: 'bg-amber-500' },
+  { id: 'cancelled',   label: '中止',   color: 'bg-rose-500',    text: 'text-rose-700',   dot: 'bg-rose-500' },
 ];
 const ORG_ROLES = [
   { id: 'admin', label: '管理者' },
@@ -86,9 +128,9 @@ const LABEL_COLORS = [
   { id: 'pink',   bg: 'bg-pink-500',   light: 'bg-pink-100 text-pink-800' },
   { id: 'gray',   bg: 'bg-gray-500',   light: 'bg-gray-200 text-gray-800' },
 ];
-const PROJECT_ICONS = ['📋','📁','💼','🚀','🎯','📊','💡','🛠','🎨','📱','🌐','🏢','📚','✨','🔥','⚡','🎉','🌟','🎁','🍀'];
-const PROJECT_COLORS = ['blue','green','red','yellow','purple','pink','indigo','teal','orange','gray'];
-const AVATAR_EMOJIS = ['👤','🧑','👩','👨','🧑‍💻','👩‍💻','👨‍💻','🧑‍🎨','👩‍🎨','👨‍🎨','🧑‍🚀','👩‍🚀','🦊','🐱','🐶','🐼','🐻','🐯','🦁','🐰'];
+const PROJECT_ICONS = ['◆','◇','■','□','●','○','▲','△','★','☆','◉','◎','◐','◑','✦','✧','♦','♢','▣','▤'];
+const PROJECT_COLORS = ['indigo','sky','teal','emerald','amber','orange','rose','purple','slate','stone'];
+const AVATAR_INITIALS_BG = ['bg-indigo-500','bg-sky-500','bg-teal-500','bg-emerald-500','bg-amber-500','bg-orange-500','bg-rose-500','bg-purple-500','bg-slate-500','bg-fuchsia-500'];
 
 /* JP holidays — minimal sample list (2025-2027 主な祝日) */
 const JP_HOLIDAYS = new Set([
@@ -147,148 +189,226 @@ const saveState = (s) => {
 function seedData() {
   const userId = 'u_me';
   const orgId = 'o_main';
-  const projId = 'p_demo';
-  const projId2 = 'p_marketing';
+  const projWeb = 'p_web';
+  const projDev = 'p_dev';
+  const projHr  = 'p_hr';
   const ts = Date.now();
   return {
     currentUserId: userId,
     currentOrgId: orgId,
-    selectedProjectId: projId,
+    selectedProjectId: projWeb,
     view: 'dashboard',
     darkMode: false,
     sidebarOpen: true,
-    nextTaskNumber: 12,
+    nextTaskNumber: 18,
     organizations: [
       {
-        id: orgId, name: 'マイ組織', icon: '🏢',
+        id: orgId, name: '株式会社あおぞら制作所', icon: '◆',
         members: [
-          { id: userId, name: '自分', email: 'me@example.com', role: 'admin', avatar: '👤' },
-          { id: 'u_tanaka', name: '田中太郎', email: 'tanaka@example.com', role: 'staff', avatar: '🧑' },
-          { id: 'u_suzuki', name: '鈴木花子', email: 'suzuki@example.com', role: 'staff', avatar: '👩' },
-          { id: 'u_sato', name: '佐藤次郎', email: 'sato@example.com', role: 'staff', avatar: '🧑‍💻' },
-          { id: 'u_guest', name: '外部パートナー', email: 'guest@partner.com', role: 'guest', avatar: '🦊' },
+          { id: userId,      name: '高橋 拓也', email: 'takahashi@aozora.co.jp', role: 'admin',         initials:'高', color:'bg-indigo-500' },
+          { id: 'u_yamaguchi', name: '山口 章',   email: 'yamaguchi@aozora.co.jp', role: 'account_admin', initials:'山', color:'bg-slate-600' },
+          { id: 'u_nakajima',  name: '中島 美穂', email: 'nakajima@aozora.co.jp',  role: 'staff',         initials:'中', color:'bg-rose-500' },
+          { id: 'u_kobayashi', name: '小林 大樹', email: 'kobayashi@aozora.co.jp', role: 'staff',         initials:'小', color:'bg-teal-500' },
+          { id: 'u_sasaki',    name: '佐々木 蓮', email: 'sasaki@aozora.co.jp',    role: 'staff',         initials:'佐', color:'bg-amber-500' },
+          { id: 'u_partner',   name: '宮原 (外部)', email: 'miyahara@partner.jp',  role: 'guest',         initials:'宮', color:'bg-stone-500' },
         ],
         holidays: { weeklyOff: [0,6], jpHolidays: true, customHolidays: [] },
         announcements: [
-          { id: 'a1', title: '🎉 ようこそ！', body: 'これは Jooto を参考にしたタスク・プロジェクト管理ツールです。サイドバーから機能をお試しください。', createdBy: userId, createdAt: ts },
-          { id: 'a2', title: '今週のリリース', body: '**ステータス自動変更機能**と**休日設定**機能をリリースしました。設定画面から有効化できます。', createdBy: userId, createdAt: ts - 86400000 },
+          { id: 'a1', title: '5月の運用フローについて',
+            body: '今月から進行管理の運用ルールを少し見直しています。\n\n- 進行中のタスクは1人あたり3件までを目安に\n- 締切の前倒し依頼はコメント欄で必ず合意を取る\n- 週次定例は毎週火曜10:00から（議題は前日17時までに追記）',
+            createdBy: 'u_yamaguchi', createdAt: ts - 1000*60*60*24*2 },
+          { id: 'a2', title: 'GW期間中のサポート体制',
+            body: '5/3 - 5/6 はサポートデスクを縮小運用とします。緊急の場合は山口宛にチャットで連絡してください。',
+            createdBy: 'u_yamaguchi', createdAt: ts - 1000*60*60*24*7 },
         ],
         bookmarks: [
-          { id: 'b1', title: '会社ポータル', url: 'https://example.com' },
-          { id: 'b2', title: 'デザインガイド', url: 'https://example.com/design' },
-          { id: 'b3', title: 'API Docs', url: 'https://example.com/api' },
+          { id: 'b1', title: '社内ポータル', url: 'https://intra.example.jp' },
+          { id: 'b2', title: 'デザインシステム',  url: 'https://design.example.jp' },
+          { id: 'b3', title: '勤怠（freee）',  url: 'https://app.secure.freee.co.jp/' },
+          { id: 'b4', title: '請求書テンプレ',  url: 'https://drive.example.jp/invoice' },
         ],
       }
     ],
     projects: [
       {
-        id: projId, orgId, name: 'サンプルプロジェクト', icon: '🚀', color: 'blue',
+        id: projWeb, orgId, name: 'ABC商事 コーポレートサイト改修', icon: '◆', color: 'indigo',
         archived: false, createdAt: ts, favorite: true,
         lists: [
-          { id: 'l1', name: '未着手',   autoStatus: 'not_started', order: 0 },
-          { id: 'l2', name: '進行中',   autoStatus: 'in_progress', order: 1 },
-          { id: 'l3', name: '確認待ち', autoStatus: 'on_hold',     order: 2 },
-          { id: 'l4', name: '完了',     autoStatus: 'completed',   order: 3 },
+          { id: 'l_back',  name: 'バックログ', autoStatus: 'not_started', order: 0 },
+          { id: 'l_doing', name: '今週やる',   autoStatus: 'in_progress', order: 1 },
+          { id: 'l_review',name: 'レビュー待ち', autoStatus: 'on_hold',   order: 2 },
+          { id: 'l_done',  name: '完了',       autoStatus: 'completed',   order: 3 },
         ],
         labels: [
-          { id: 'lb1', name: '優先度:高', color: 'red' },
-          { id: 'lb2', name: '優先度:中', color: 'yellow' },
-          { id: 'lb3', name: '優先度:低', color: 'green' },
-          { id: 'lb4', name: 'バグ',      color: 'pink' },
-          { id: 'lb5', name: '改善',      color: 'blue' },
-          { id: 'lb6', name: 'デザイン',  color: 'purple' },
-          { id: 'lb7', name: '開発',      color: 'indigo' },
-          { id: 'lb8', name: 'リリース',  color: 'teal' },
+          { id: 'lb_urgent',  name: '至急',     color: 'rose' },
+          { id: 'lb_design',  name: 'デザイン', color: 'purple' },
+          { id: 'lb_dev',     name: '実装',     color: 'indigo' },
+          { id: 'lb_content', name: '原稿',     color: 'amber' },
+          { id: 'lb_review',  name: '社内確認', color: 'teal' },
+          { id: 'lb_client',  name: '先方確認', color: 'sky' },
         ],
         members: [
-          { userId: 'u_me', role: 'pm' },
-          { userId: 'u_tanaka', role: 'member' },
-          { userId: 'u_suzuki', role: 'member' },
-          { userId: 'u_sato', role: 'submember' },
+          { userId: 'u_me',         role: 'pm' },
+          { userId: 'u_nakajima',   role: 'member' },
+          { userId: 'u_kobayashi',  role: 'member' },
+          { userId: 'u_partner',    role: 'submember' },
         ],
       },
       {
-        id: projId2, orgId, name: 'マーケティング Q2', icon: '📊', color: 'green',
-        archived: false, createdAt: ts, favorite: false,
+        id: projDev, orgId, name: '社内ツール開発（v1.4）', icon: '■', color: 'teal',
+        archived: false, createdAt: ts, favorite: true,
         lists: [
-          { id: 'ml1', name: 'バックログ', autoStatus: 'not_started', order: 0 },
-          { id: 'ml2', name: '実行中',     autoStatus: 'in_progress', order: 1 },
-          { id: 'ml3', name: '完了',       autoStatus: 'completed',   order: 2 },
+          { id: 'd_back',  name: 'Backlog',     autoStatus: 'not_started', order: 0 },
+          { id: 'd_doing', name: 'In Progress', autoStatus: 'in_progress', order: 1 },
+          { id: 'd_qa',    name: 'QA',          autoStatus: 'on_hold',     order: 2 },
+          { id: 'd_done',  name: 'Done',        autoStatus: 'completed',   order: 3 },
         ],
         labels: [
-          { id: 'mlb1', name: 'SNS', color: 'blue' },
-          { id: 'mlb2', name: '広告', color: 'orange' },
-          { id: 'mlb3', name: 'PR',   color: 'green' },
+          { id: 'dlb_bug',     name: 'bug',     color: 'rose' },
+          { id: 'dlb_feat',    name: 'feature', color: 'indigo' },
+          { id: 'dlb_chore',   name: 'chore',   color: 'slate' },
+          { id: 'dlb_p1',      name: 'P1',      color: 'orange' },
+          { id: 'dlb_p2',      name: 'P2',      color: 'amber' },
         ],
         members: [
-          { userId: 'u_me', role: 'pm' },
-          { userId: 'u_suzuki', role: 'member' },
+          { userId: 'u_me',        role: 'pm' },
+          { userId: 'u_kobayashi', role: 'member' },
+          { userId: 'u_sasaki',    role: 'member' },
+        ],
+      },
+      {
+        id: projHr, orgId, name: '2026新卒採用', icon: '●', color: 'amber',
+        archived: false, createdAt: ts, favorite: false,
+        lists: [
+          { id: 'h_appl', name: '応募受付',   autoStatus: 'not_started', order: 0 },
+          { id: 'h_1st',  name: '一次面談',   autoStatus: 'in_progress', order: 1 },
+          { id: 'h_2nd',  name: '二次面談',   autoStatus: 'in_progress', order: 2 },
+          { id: 'h_off',  name: 'オファー',   autoStatus: 'on_hold',     order: 3 },
+          { id: 'h_done', name: '内定',       autoStatus: 'completed',   order: 4 },
+        ],
+        labels: [
+          { id: 'hlb_eng',    name: 'エンジニア', color: 'indigo' },
+          { id: 'hlb_design', name: 'デザイナー', color: 'purple' },
+          { id: 'hlb_sales',  name: '営業',       color: 'sky' },
+        ],
+        members: [
+          { userId: 'u_me',         role: 'member' },
+          { userId: 'u_yamaguchi',  role: 'pm' },
+          { userId: 'u_nakajima',   role: 'member' },
         ],
       },
     ],
     tasks: [
-      mkTask({ id:'t1', projectId:projId, listId:'l1', taskNumber:1, title:'デザイン案を3パターン作成',
-        description:'## 概要\nLPのデザイン案を**3パターン**作成する。\n- ターゲット: 30代女性\n- カラー: ブルー基調',
-        assignees:['u_suzuki'], startDate: today(), dueDate: addDays(today(),5), labels:['lb1','lb6'], status:'not_started',
+      // ABC商事
+      mkTask({ id:'t1', projectId:projWeb, listId:'l_back', taskNumber:1, title:'トップページのワイヤーを清書',
+        description:'前回打ち合わせの議事メモをもとに、トップ・サービス・採用の3画面のワイヤーを清書する。\n\n- ヒアリング議事録: /docs/abc/2026-04-22.md\n- 参考: 同業他社A社、B社の構成',
+        assignees:['u_nakajima'], startDate: today(), dueDate: addDays(today(),3),
+        labels:['lb_design'], followers:['u_me'],
         checklist:[
-          { id:'c1', text:'ワイヤーフレーム', done:true, assignees:['u_suzuki'], dueDate:null, startDate:null },
-          { id:'c2', text:'カラースキーム決定', done:false, assignees:[], dueDate:null, startDate:null },
-          { id:'c3', text:'プロトタイプ作成', done:false, assignees:[], dueDate:null, startDate:null },
-        ], followers:['u_me'], comments:[
-          { id:'cm1', userId:'u_me', text:'@鈴木花子 よろしくお願いします！', createdAt: ts-3600000 },
-          { id:'cm2', userId:'u_suzuki', text:'承知しました。3日以内に初稿提出します。', createdAt: ts-1800000 },
+          { id:'c1', text:'トップ', done:true,  assignees:['u_nakajima'] },
+          { id:'c2', text:'サービス紹介', done:false, assignees:['u_nakajima'] },
+          { id:'c3', text:'採用ページ', done:false, assignees:[] },
+        ],
+        comments:[
+          { id:'cm1', userId:'u_me',       text:'採用ページは新卒・中途で導線を分ける案でお願いします。', createdAt: ts-1000*60*60*5 },
+          { id:'cm2', userId:'u_nakajima', text:'了解です。今日中に1案あげます。', createdAt: ts-1000*60*60*4 },
         ], order:0 }),
-      mkTask({ id:'t2', projectId:projId, listId:'l2', taskNumber:2, title:'API設計とドキュメント作成',
-        description:'REST API のエンドポイントを設計し、OpenAPI Spec を書く。',
-        assignees:['u_tanaka'], startDate: addDays(today(),-2), dueDate: addDays(today(),3), labels:['lb2','lb7'], status:'in_progress', followers:[], order:0,
+      mkTask({ id:'t2', projectId:projWeb, listId:'l_doing', taskNumber:2, title:'採用ページ用の社員インタビュー（中田部長）',
+        description:'5/14(木) 14:00 - 本社3F会議室。質問項目はNotionに整理済み。',
+        assignees:['u_kobayashi'], startDate: addDays(today(),-1), dueDate: addDays(today(),2),
+        labels:['lb_content'], order:0 }),
+      mkTask({ id:'t3', projectId:projWeb, listId:'l_doing', taskNumber:3, title:'お問い合わせフォーム（reCAPTCHA対応）',
+        description:'バリデーション・送信完了後の遷移・スパム対策まで。',
+        assignees:['u_partner'], startDate: today(), dueDate: addDays(today(),4),
+        labels:['lb_dev'], order:1,
         checklist:[
-          { id:'c4', text:'エンドポイント一覧', done:true },
-          { id:'c5', text:'認証フロー定義', done:true },
-          { id:'c6', text:'OpenAPI Spec 記述', done:false },
+          { id:'c4', text:'入力バリデーション', done:true },
+          { id:'c5', text:'reCAPTCHA v3 組み込み', done:false },
+          { id:'c6', text:'送信完了画面', done:false },
         ] }),
-      mkTask({ id:'t3', projectId:projId, listId:'l2', taskNumber:3, title:'DB スキーマ設計',
-        description:'タスク管理用のテーブル設計を行う', assignees:['u_sato'], startDate: today(), dueDate: addDays(today(),1),
-        labels:['lb1','lb7'], status:'in_progress', order:1 }),
-      mkTask({ id:'t4', projectId:projId, listId:'l3', taskNumber:4, title:'マーケ部のレビュー待ち',
-        description:'デザイン案をマーケ部に共有しレビュー待ち', assignees:['u_me'], startDate: addDays(today(),-3), dueDate: addDays(today(),-1),
-        labels:['lb2'], status:'on_hold', order:0 }),
-      mkTask({ id:'t5', projectId:projId, listId:'l4', taskNumber:5, title:'要件定義書を完成',
-        description:'プロジェクトの要件定義書をまとめた', assignees:['u_me','u_tanaka'], startDate: addDays(today(),-10), dueDate: addDays(today(),-5),
-        labels:['lb3','lb8'], status:'completed', order:0 }),
-      mkTask({ id:'t6', projectId:projId, listId:'l1', taskNumber:6, title:'リリース告知ブログ準備',
-        description:'リリース時のブログ記事を準備', assignees:['u_suzuki'], startDate: addDays(today(),3), dueDate: addDays(today(),8),
-        labels:['lb3','lb8'], status:'not_started', order:1 }),
-      mkTask({ id:'t7', projectId:projId, listId:'l1', taskNumber:7, title:'バグ: ログイン後のリダイレクト不正',
-        description:'## 再現手順\n1. ログイン\n2. /home にリダイレクトされない', assignees:['u_tanaka'], startDate: today(), dueDate: today(),
-        labels:['lb1','lb4'], status:'not_started', order:2 }),
-      mkTask({ id:'t8', projectId:projId2, listId:'ml1', taskNumber:8, title:'Twitterキャンペーン設計',
-        description:'Q2のTwitterキャンペーンを設計', assignees:['u_suzuki'], startDate: today(), dueDate: addDays(today(),7),
-        labels:['mlb1'], status:'not_started', order:0 }),
-      mkTask({ id:'t9', projectId:projId2, listId:'ml2', taskNumber:9, title:'Google広告 入稿',
-        description:'検索広告とディスプレイ広告を入稿', assignees:['u_me'], startDate: addDays(today(),-1), dueDate: addDays(today(),2),
-        labels:['mlb2'], status:'in_progress', order:0 }),
-      mkTask({ id:'t10', projectId:projId2, listId:'ml3', taskNumber:10, title:'プレスリリース配信',
-        description:'PR TIMES 経由で配信完了', assignees:['u_me'], startDate: addDays(today(),-7), dueDate: addDays(today(),-3),
-        labels:['mlb3'], status:'completed', order:0 }),
-      mkTask({ id:'t11', projectId:projId, listId:'l1', taskNumber:11, title:'お問い合わせフォーム実装',
-        description:'バリデーション + reCAPTCHA を含む', assignees:['u_sato'], startDate: addDays(today(),1), dueDate: addDays(today(),4),
-        labels:['lb2','lb7'], status:'not_started', order:3 }),
+      mkTask({ id:'t4', projectId:projWeb, listId:'l_review', taskNumber:4, title:'初稿デザイン 先方レビュー',
+        description:'コメントは Figma 上で集約。返答期限は 5/12(月)。',
+        assignees:['u_me'], startDate: addDays(today(),-4), dueDate: addDays(today(),-1),
+        labels:['lb_client','lb_urgent'], order:0,
+        comments:[
+          { id:'cm3', userId:'u_yamaguchi', text:'@高橋 拓也 先方からの返答、念のため文面確認します。送る前に共有してください。', createdAt: ts-1000*60*60*20 },
+        ] }),
+      mkTask({ id:'t5', projectId:projWeb, listId:'l_done', taskNumber:5, title:'キックオフMTG 議事録',
+        description:'共有済み。',
+        assignees:['u_me'], startDate: addDays(today(),-12), dueDate: addDays(today(),-10),
+        labels:['lb_review'], order:0 }),
+      mkTask({ id:'t6', projectId:projWeb, listId:'l_back', taskNumber:6, title:'スマホ用 メニュー（ハンバーガー）の挙動検討',
+        description:'A案：オーバーレイ / B案：ドロワー。次回のMTGで決定。',
+        assignees:['u_nakajima'], startDate: addDays(today(),5), dueDate: addDays(today(),9),
+        labels:['lb_design'], order:1 }),
+      mkTask({ id:'t7', projectId:projWeb, listId:'l_back', taskNumber:7, title:'公開前チェックリストの作成',
+        description:'OGP, sitemap, 404, リダイレクトなど。\nチェックは 2人体制で。',
+        assignees:['u_me','u_kobayashi'], startDate: addDays(today(),10), dueDate: addDays(today(),14),
+        labels:['lb_review'], order:2 }),
+
+      // 社内ツール
+      mkTask({ id:'t8', projectId:projDev, listId:'d_doing', taskNumber:8, title:'通知設定の保存先をユーザー単位に変更',
+        description:'いまは組織単位で持っていて、所属が複数あるとうまく機能しない。\n\nスキーマ変更が必要なのでマイグレーションも合わせて。',
+        assignees:['u_kobayashi'], startDate: addDays(today(),-3), dueDate: addDays(today(),1),
+        labels:['dlb_feat','dlb_p1'], order:0,
+        comments:[
+          { id:'cm5', userId:'u_kobayashi', text:'マイグレーションのスクリプト書いてます。バックアップは取得済みです。', createdAt: ts-1000*60*60*8 },
+        ]}),
+      mkTask({ id:'t9', projectId:projDev, listId:'d_doing', taskNumber:9, title:'検索結果の並び順を更新日時順に',
+        description:'#412 で起票されてた件。デフォルトは更新日時降順。',
+        assignees:['u_sasaki'], startDate: today(), dueDate: today(),
+        labels:['dlb_feat','dlb_p2'], order:1 }),
+      mkTask({ id:'t10', projectId:projDev, listId:'d_back', taskNumber:10, title:'CSVインポート時のエラー文言が不親切',
+        description:'「不正な形式です」だけだと原因がわからないと現場から指摘あり。\n行番号と該当列を出すように。',
+        assignees:[], startDate: null, dueDate: null,
+        labels:['dlb_bug','dlb_p2'], order:0 }),
+      mkTask({ id:'t11', projectId:projDev, listId:'d_back', taskNumber:11, title:'休日設定機能の仕様メモを更新',
+        description:'CIDR対応周りの記述が古いままなので追記。',
+        assignees:['u_me'], startDate: addDays(today(),2), dueDate: addDays(today(),4),
+        labels:['dlb_chore'], order:1 }),
+      mkTask({ id:'t12', projectId:projDev, listId:'d_qa', taskNumber:12, title:'通知音が二重に鳴る問題',
+        description:'macOS Safari でのみ再現。バックグラウンドタブだと出ない。',
+        assignees:['u_sasaki'], startDate: addDays(today(),-2), dueDate: addDays(today(),1),
+        labels:['dlb_bug','dlb_p1'], order:0 }),
+      mkTask({ id:'t13', projectId:projDev, listId:'d_done', taskNumber:13, title:'依存パッケージの更新（マイナーバージョン）',
+        description:'CIは通過済み。',
+        assignees:['u_kobayashi'], startDate: addDays(today(),-9), dueDate: addDays(today(),-7),
+        labels:['dlb_chore'], order:0 }),
+
+      // 採用
+      mkTask({ id:'t14', projectId:projHr, listId:'h_1st', taskNumber:14, title:'山田さん 一次面談（5/15 16:00）',
+        description:'希望ポジション: フロントエンド\n面談担当: 山口・小林\n書類は人事フォルダの「山田太郎」内に。',
+        assignees:['u_yamaguchi','u_kobayashi'], startDate: addDays(today(),5), dueDate: addDays(today(),5),
+        labels:['hlb_eng'], order:0 }),
+      mkTask({ id:'t15', projectId:projHr, listId:'h_2nd', taskNumber:15, title:'佐藤さん 二次面談 日程調整',
+        description:'本人都合で来週後半希望。山口部長と中島の予定を抑える。',
+        assignees:['u_nakajima'], startDate: today(), dueDate: addDays(today(),2),
+        labels:['hlb_design'], order:0 }),
+      mkTask({ id:'t16', projectId:projHr, listId:'h_appl', taskNumber:16, title:'リファラル経由 田中さん 書類確認',
+        description:'紹介者: 中島さん',
+        assignees:['u_yamaguchi'], startDate: today(), dueDate: addDays(today(),3),
+        labels:['hlb_sales'], order:0 }),
+      mkTask({ id:'t17', projectId:projHr, listId:'h_off', taskNumber:17, title:'内定通知書 ドラフト確認（高橋・山口）',
+        description:'処遇条件はテンプレからの差分のみ赤字で記載済み。',
+        assignees:['u_me','u_yamaguchi'], startDate: addDays(today(),-1), dueDate: addDays(today(),1),
+        labels:['hlb_eng'], order:0 }),
     ],
     history: [
-      { id: uid('h'), type:'task_created', projectId:projId, taskId:'t1', userId:userId, ts: ts-7200000, text: '「デザイン案を3パターン作成」を作成' },
-      { id: uid('h'), type:'task_moved', projectId:projId, taskId:'t2', userId:userId, ts: ts-5400000, text: '「API設計」を 進行中 へ移動' },
-      { id: uid('h'), type:'comment', projectId:projId, taskId:'t1', userId:userId, ts: ts-3600000, text: '「デザイン案」にコメント' },
+      { id: uid('h'), type:'task_moved',   projectId:projWeb, taskId:'t4', userId:'u_yamaguchi', ts: ts-1000*60*60*20, text:'「初稿デザイン 先方レビュー」をレビュー待ちへ' },
+      { id: uid('h'), type:'comment',      projectId:projWeb, taskId:'t1', userId:'u_nakajima',  ts: ts-1000*60*60*4,  text:'「トップページのワイヤーを清書」にコメント' },
+      { id: uid('h'), type:'task_created', projectId:projDev, taskId:'t10',userId:'u_sasaki',    ts: ts-1000*60*60*9,  text:'「CSVインポート時のエラー文言が不親切」を作成' },
     ],
     archive: { tasks: [], lists: [], projects: [] },
     notifications: [
-      { id: uid('n'), type:'mention', taskId:'t1', text:'@自分 がメンションされました', createdAt: ts-3600000, read: false },
-      { id: uid('n'), type:'due_soon', taskId:'t3', text:'「DB スキーマ設計」の締切が明日です', createdAt: ts-1800000, read: false },
+      { id: uid('n'), type:'mention', taskId:'t4', text:'山口さんが「初稿デザイン 先方レビュー」であなたにメンションしました', createdAt: ts-1000*60*60*20, read:false },
+      { id: uid('n'), type:'due_soon', taskId:'t9', text:'「検索結果の並び順を更新日時順に」の締切は今日です', createdAt: ts-1000*60*60*2, read:false },
     ],
     automation: { webhooks: [
-      { id: uid('w'), name:'Slack #general', url:'https://hooks.slack.com/services/...', events:['task_created','task_moved'], enabled:true },
+      { id: uid('w'), name:'Slack #pj-abc', url:'https://hooks.slack.com/services/T0XXX/B0XXX/xxxxxxxxxxxx', events:['task_created','task_moved','comment'], enabled:true },
+      { id: uid('w'), name:'Teams 開発チーム', url:'https://outlook.office.com/webhook/xxxxxxxx', events:['task_moved'], enabled:false },
     ] },
     apiKeys: [
-      { id: uid('k'), name:'Default Key', key:'jt_'+Math.random().toString(36).slice(2,18), createdAt: ts },
+      { id: uid('k'), name:'GitHub Actions（CI連携）', key:'sk_'+Math.random().toString(36).slice(2,18), createdAt: ts - 1000*60*60*24*30 },
     ],
     aiSettings: { feedbackTone: 3, summaryDetail: 3 },
   };
@@ -497,8 +617,10 @@ function reducer(state, action) {
     /* ===== Members ===== */
     case 'ADD_ORG_MEMBER': {
       const id = uid('u');
+      const initials = (action.name||'?').trim().slice(0,1);
+      const color = AVATAR_INITIALS_BG[Math.floor(Math.random()*AVATAR_INITIALS_BG.length)];
       return { ...state, organizations: state.organizations.map(o => o.id===state.currentOrgId ? {
-        ...o, members: [...o.members, { id, name: action.name, email: action.email, role: action.role||'staff', avatar: action.avatar||'👤' }]
+        ...o, members: [...o.members, { id, name: action.name, email: action.email, role: action.role||'staff', initials, color }]
       } : o) };
     }
     case 'UPDATE_ORG_MEMBER':
@@ -635,19 +757,19 @@ const useApp = () => useContext(AppCtx);
 /* =========================================
  * Reusable UI
  * ========================================= */
-function Btn({ children, onClick, variant='primary', size='md', icon, className='', type='button', disabled }) {
+function Btn({ children, onClick, variant='primary', size='md', icon, className='', type='button', disabled, title }) {
   const variants = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
-    secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-100',
-    ghost: 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
-    success: 'bg-green-600 hover:bg-green-700 text-white',
-    outline: 'border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800',
+    primary:   'bg-accent-600 hover:bg-accent-700 active:bg-accent-800 text-white shadow-sm',
+    secondary: 'bg-ink-100 hover:bg-ink-200 text-ink-800 dark:bg-ink-700 dark:hover:bg-ink-600 dark:text-ink-100',
+    ghost:     'hover:bg-ink-100 dark:hover:bg-ink-800 text-ink-700 dark:text-ink-200',
+    danger:    'bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white shadow-sm',
+    success:   'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm',
+    outline:   'border border-ink-200 dark:border-ink-700 hover:bg-ink-50 dark:hover:bg-ink-800 text-ink-700 dark:text-ink-200',
   };
-  const sizes = { xs:'px-2 py-1 text-xs', sm:'px-3 py-1 text-sm', md:'px-3 py-1.5 text-sm', lg:'px-4 py-2 text-base' };
-  return <button type={type} disabled={disabled} onClick={onClick}
-    className={`inline-flex items-center gap-1.5 rounded font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
-    {icon && <span>{icon}</span>}{children}
+  const sizes = { xs:'px-2 py-1 text-xs', sm:'px-3 py-1.5 text-sm', md:'px-3.5 py-1.5 text-sm', lg:'px-4 py-2 text-sm' };
+  return <button type={type} disabled={disabled} onClick={onClick} title={title}
+    className={`inline-flex items-center gap-1.5 rounded-md font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-300 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
+    {icon && <span className="opacity-80">{icon}</span>}{children}
   </button>;
 }
 
@@ -655,15 +777,16 @@ function Modal({ open, onClose, title, children, footer, size='md', closeOnBackd
   if (!open) return null;
   const sizeMap = { sm:'max-w-md', md:'max-w-2xl', lg:'max-w-4xl', xl:'max-w-6xl', full:'max-w-[95vw]' };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 modal-backdrop"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm modal-backdrop"
          onClick={(e) => { if (closeOnBackdrop && e.target===e.currentTarget) onClose(); }}>
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full ${sizeMap[size]} max-h-[90vh] flex flex-col modal-content`}>
-        <div className="flex items-center justify-between px-5 py-3 border-b dark:border-gray-700">
-          <h3 className="font-bold text-lg">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 text-2xl leading-none">×</button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-5 scrollbar-thin">{children}</div>
-        {footer && <div className="border-t dark:border-gray-700 px-5 py-3 flex justify-end gap-2">{footer}</div>}
+      <div className={`bg-white dark:bg-ink-800 rounded-xl shadow-pop w-full ${sizeMap[size]} max-h-[90vh] flex flex-col modal-content`}>
+        {title !== null && <div className="flex items-center justify-between px-5 py-3 border-b border-ink-100 dark:border-ink-700/60">
+          <h3 className="font-semibold text-[15px] tracking-tight">{title}</h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-800 dark:hover:text-ink-100 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-ink-100 dark:hover:bg-ink-700">×</button>
+        </div>}
+        {title === null && <button onClick={onClose} className="absolute top-3 right-3 text-ink-400 hover:text-ink-800 dark:hover:text-ink-100 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-ink-100 dark:hover:bg-ink-700 z-10">×</button>}
+        <div className={`flex-1 overflow-y-auto ${title===null?'p-6':'p-5'} scrollbar-thin relative`}>{children}</div>
+        {footer && <div className="border-t border-ink-100 dark:border-ink-700/60 px-5 py-3 flex justify-end gap-2">{footer}</div>}
       </div>
     </div>
   );
@@ -671,35 +794,46 @@ function Modal({ open, onClose, title, children, footer, size='md', closeOnBackd
 
 function Input({ value, onChange, placeholder, type='text', className='', ...rest }) {
   return <input type={type} value={value ?? ''} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder}
-    className={`w-full px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...rest} />;
+    className={`w-full px-3 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-400 ${className}`} {...rest} />;
 }
 
 function Textarea({ value, onChange, placeholder, rows=3, className='' }) {
   return <textarea value={value ?? ''} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder} rows={rows}
-    className={`w-full px-3 py-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${className}`} />;
+    className={`w-full px-3 py-2 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-400 resize-y ${className}`} />;
 }
 
 function Select({ value, onChange, options, className='' }) {
   return <select value={value ?? ''} onChange={(e)=>onChange(e.target.value)}
-    className={`px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`}>
+    className={`px-2.5 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 ${className}`}>
     {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
   </select>;
 }
 
-function Avatar({ user, size=24 }) {
-  if (!user) return <span className="inline-flex items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600" style={{width:size,height:size,fontSize:size*0.6}}>?</span>;
-  return <span title={user.name} className="inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700" style={{width:size,height:size,fontSize:size*0.6}}>{user.avatar}</span>;
+function Avatar({ user, size=24, ring=false }) {
+  const dim = { width:size, height:size, fontSize: Math.max(10, Math.round(size*0.42)) };
+  if (!user) return <span className="inline-flex items-center justify-center rounded-full bg-ink-200 dark:bg-ink-700 text-ink-500 font-medium" style={dim}>?</span>;
+  const bg = user.color || 'bg-ink-500';
+  const initials = user.initials || (user.name ? user.name.trim().slice(0,1) : '?');
+  return <span title={user.name}
+    className={`inline-flex items-center justify-center rounded-full text-white font-medium select-none ${bg} ${ring?'ring-2 ring-white dark:ring-ink-800':''}`}
+    style={dim}>{initials}</span>;
 }
 
 function LabelPill({ label, removable, onRemove }) {
   if (!label) return null;
   const c = colorObj(label.color);
-  return <span className={`label-pill ${c.light}`}>{label.name}{removable && <button className="ml-1 hover:opacity-60" onClick={(e)=>{e.stopPropagation();onRemove?.();}}>×</button>}</span>;
+  return <span className={`label-pill ${c.light}`}>
+    <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1 ${c.bg}`}></span>
+    {label.name}
+    {removable && <button className="ml-1 -mr-0.5 hover:opacity-60" onClick={(e)=>{e.stopPropagation();onRemove?.();}}>×</button>}
+  </span>;
 }
 
 function StatusPill({ status }) {
   const s = statusObj(status);
-  return <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${s.color} text-white`}><span className="w-1.5 h-1.5 rounded-full bg-white/80"></span>{s.label}</span>;
+  return <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-medium bg-white dark:bg-ink-800 border border-ink-200 dark:border-ink-700 text-ink-700 dark:text-ink-200`}>
+    <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`}></span>{s.label}
+  </span>;
 }
 
 function Markdown({ text }) {
@@ -725,7 +859,7 @@ function ColorPicker({ value, onChange, options }) {
 
 function Toast({ msg }) {
   if (!msg) return null;
-  return <div className="fixed top-4 right-4 z-[100] bg-gray-900 text-white px-4 py-2 rounded shadow-lg toast">{msg}</div>;
+  return <div className="fixed top-4 right-4 z-[100] bg-ink-900 text-white px-4 py-2 rounded-md shadow-pop text-[13px] toast">{msg}</div>;
 }
 
 /* =========================================
@@ -738,61 +872,70 @@ function Sidebar() {
   const archivedCount = state.projects.filter(p => p.archived).length;
   const [collapsed, setCollapsed] = useState(false);
 
-  const navItem = (icon, label, view, active, badge) => (
+  const navItem = (label, view, active, badge) => (
     <button onClick={()=>dispatch({ type:'SET_VIEW', view })}
-      className={`w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition ${active?'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-semibold':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-      <span className="text-lg">{icon}</span>{!collapsed && <span className="flex-1 text-left">{label}</span>}
-      {!collapsed && badge != null && badge > 0 && <span className="text-xs bg-red-500 text-white rounded-full px-1.5 min-w-5 text-center">{badge}</span>}
+      className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] transition ${active?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200 font-semibold':'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800/60'}`}>
+      {!collapsed && <span className="flex-1 text-left">{label}</span>}
+      {!collapsed && badge != null && badge > 0 && <span className="text-[10px] bg-rose-500 text-white rounded-full px-1.5 min-w-[18px] text-center font-semibold">{badge}</span>}
     </button>
   );
 
   const unreadCount = state.notifications.filter(n => !n.read).length;
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-64'} bg-white dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col transition-all`}>
-      <div className="p-3 border-b dark:border-gray-700 flex items-center gap-2">
-        <span className="text-2xl">🚀</span>
-        {!collapsed && <span className="font-bold text-blue-600">Jooto Clone</span>}
-        <button onClick={()=>setCollapsed(!collapsed)} className="ml-auto text-gray-400 hover:text-gray-600 text-sm">{collapsed?'»':'«'}</button>
+    <aside className={`${collapsed ? 'w-14' : 'w-60'} bg-white dark:bg-ink-800 border-r border-ink-200 dark:border-ink-700/60 flex flex-col transition-all`}>
+      <div className="px-3 h-14 border-b border-ink-200 dark:border-ink-700/60 flex items-center gap-2">
+        <span className="sk-logo">sk</span>
+        {!collapsed && <div className="leading-tight">
+          <div className="text-[14px] font-semibold tracking-tight">sky-kanri</div>
+          <div className="text-[10px] text-ink-400">team workspace</div>
+        </div>}
+        <button onClick={()=>setCollapsed(!collapsed)} className="ml-auto text-ink-400 hover:text-ink-700 dark:hover:text-ink-100 text-xs px-1">{collapsed?'›':'‹'}</button>
       </div>
-      <div className="p-2 border-b dark:border-gray-700">
-        <button onClick={()=>openModal('switchOrg')} className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-          <span className="text-xl">{org?.icon}</span>
-          {!collapsed && <span className="text-sm font-medium truncate">{org?.name}</span>}
+
+      <div className="px-2 py-2 border-b border-ink-200 dark:border-ink-700/60">
+        <button onClick={()=>openModal('switchOrg')} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-ink-100 dark:hover:bg-ink-700/40">
+          <span className="w-7 h-7 rounded bg-ink-900 dark:bg-ink-700 text-white text-xs flex items-center justify-center font-medium">{org?.name?.slice(0,1)}</span>
+          {!collapsed && <span className="text-[13px] font-medium truncate">{org?.name}</span>}
         </button>
       </div>
-      <nav className="p-2 space-y-0.5">
-        {navItem('📊','ダッシュボード','dashboard', state.view==='dashboard', unreadCount)}
-        {navItem('📝','全てのタスク','all-tasks', state.view==='all-tasks')}
-        {navItem('📅','全てのガント','all-gantt', state.view==='all-gantt')}
-        {navItem('🔍','検索','search', state.view==='search')}
-        {navItem('📦','アーカイブ','archive', state.view==='archive', archivedCount)}
+
+      <nav className="px-2 py-2 space-y-0.5">
+        {navItem('ダッシュボード','dashboard', state.view==='dashboard', unreadCount)}
+        {navItem('全てのタスク','all-tasks', state.view==='all-tasks')}
+        {navItem('全てのガント','all-gantt', state.view==='all-gantt')}
+        {navItem('検索','search', state.view==='search')}
+        {navItem('アーカイブ','archive', state.view==='archive', archivedCount)}
       </nav>
-      <div className="p-2 border-t dark:border-gray-700">
-        <div className="flex items-center justify-between px-2 mb-1">
-          {!collapsed && <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">プロジェクト</span>}
-          <button onClick={()=>openModal('newProject')} title="新しいプロジェクト" className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded px-1">+</button>
+
+      <div className="px-2 py-2 border-t border-ink-200 dark:border-ink-700/60">
+        <div className="flex items-center justify-between px-2 mb-1.5">
+          {!collapsed && <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-[0.08em]">プロジェクト</span>}
+          <button onClick={()=>openModal('newProject')} title="新しいプロジェクト" className="text-ink-400 hover:text-accent-600 hover:bg-accent-50 dark:hover:bg-accent-900/30 rounded w-5 h-5 flex items-center justify-center text-base leading-none">+</button>
         </div>
-        <div className="space-y-0.5 max-h-[40vh] overflow-y-auto scrollbar-thin">
+        <div className="space-y-px max-h-[40vh] overflow-y-auto scrollbar-thin">
           {projects.sort((a,b)=> (b.favorite?1:0)-(a.favorite?1:0)).map(p => {
             const tasksCount = state.tasks.filter(t => t.projectId===p.id && !t.archived && t.status!=='completed').length;
+            const active = state.selectedProjectId===p.id && (state.view==='board' || state.view==='gantt' || state.view==='project-settings');
+            const dotColor = `bg-${p.color}-500`;
             return <button key={p.id} onClick={()=>dispatch({ type:'SET_VIEW', view:'board', projectId:p.id })}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm ${state.selectedProjectId===p.id && state.view==='board'?'bg-blue-100 dark:bg-blue-900/40':'hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
-              <span className="text-lg">{p.icon}</span>
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] ${active?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200':'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800/60'}`}>
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}></span>
               {!collapsed && <>
                 <span className="flex-1 text-left truncate">{p.name}</span>
-                {p.favorite && <span className="text-yellow-500 text-xs">★</span>}
-                {tasksCount > 0 && <span className="text-[10px] bg-gray-200 dark:bg-gray-700 rounded px-1">{tasksCount}</span>}
+                {p.favorite && <span className="text-amber-500 text-xs">★</span>}
+                {tasksCount > 0 && <span className="text-[10px] text-ink-500 num">{tasksCount}</span>}
               </>}
             </button>;
           })}
         </div>
       </div>
-      <div className="mt-auto p-2 border-t dark:border-gray-700 space-y-0.5">
-        {navItem('⚙️','設定','settings', state.view==='settings')}
-        {navItem('🔌','API・自動化','automation', state.view==='automation')}
-        {navItem('🤖','AI機能','ai', state.view==='ai')}
-        {navItem('📜','行動履歴','history', state.view==='history')}
+
+      <div className="mt-auto px-2 py-2 border-t border-ink-200 dark:border-ink-700/60 space-y-0.5">
+        {navItem('行動履歴','history', state.view==='history')}
+        {navItem('アシスタント','ai', state.view==='ai')}
+        {navItem('連携 / API','automation', state.view==='automation')}
+        {navItem('組織設定','settings', state.view==='settings')}
       </div>
     </aside>
   );
@@ -813,25 +956,35 @@ function TopBar() {
     if (v) dispatch({ type:'SET_VIEW', view:'search' });
   };
 
+  const iconBtn = "w-9 h-9 inline-flex items-center justify-center rounded-md text-ink-500 hover:text-ink-900 hover:bg-ink-100 dark:text-ink-400 dark:hover:text-white dark:hover:bg-ink-700/50";
+
   return (
-    <div className="h-14 bg-white dark:bg-gray-800 border-b dark:border-gray-700 px-4 flex items-center gap-3">
+    <div className="h-14 bg-white dark:bg-ink-800 border-b border-ink-200 dark:border-ink-700/60 px-4 flex items-center gap-2">
       <div className="flex-1 max-w-md relative">
-        <input value={search} onChange={(e)=>onSearch(e.target.value)} placeholder="🔍 タスク・プロジェクトを検索..."
-          className="w-full px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 text-sm">⌕</span>
+        <input value={search} onChange={(e)=>onSearch(e.target.value)} placeholder="タスク・プロジェクトを検索"
+          className="w-full pl-9 pr-3 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-900/40 text-sm focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400 placeholder:text-ink-400" />
       </div>
-      <Btn size="sm" variant="ghost" icon="🤖" onClick={()=>openModal('aiGenerate')}>AI生成</Btn>
-      <Btn size="sm" variant="ghost" icon="📥" onClick={()=>openModal('import')}>インポート</Btn>
-      <button onClick={()=>dispatch({ type:'TOGGLE_DARK' })} className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700" title="ダークモード">{state.darkMode?'🌙':'☀️'}</button>
+      <Btn size="sm" variant="ghost" onClick={()=>openModal('import')}>取り込み</Btn>
+      <Btn size="sm" variant="outline" onClick={()=>openModal('aiGenerate')}>アシスタント</Btn>
+      <button onClick={()=>dispatch({ type:'TOGGLE_DARK' })} className={iconBtn} title={state.darkMode?'ライトモードに切替':'ダークモードに切替'} aria-label="theme">
+        {state.darkMode
+          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>}
+      </button>
       <div className="relative">
-        <button onClick={()=>setShowNotifs(!showNotifs)} className="px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 relative">
-          🔔 {unread > 0 && <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] rounded-full px-1 min-w-4 text-center">{unread}</span>}
+        <button onClick={()=>setShowNotifs(!showNotifs)} className={`${iconBtn} relative`} aria-label="通知">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          {unread > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-rose-500"></span>}
         </button>
         {showNotifs && <NotificationsPopup onClose={()=>setShowNotifs(false)} />}
       </div>
+      <div className="w-px h-6 bg-ink-200 dark:bg-ink-700 mx-1"></div>
       <div className="relative">
-        <button onClick={()=>setShowUser(!showUser)} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+        <button onClick={()=>setShowUser(!showUser)} className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md hover:bg-ink-100 dark:hover:bg-ink-700/40">
           <Avatar user={currentUser} size={28} />
           <span className="text-sm hidden md:inline">{currentUser?.name}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-ink-400"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         {showUser && <UserMenu onClose={()=>setShowUser(false)} />}
       </div>
@@ -842,18 +995,18 @@ function TopBar() {
 function NotificationsPopup({ onClose }) {
   const { state, dispatch, openTask } = useApp();
   return (
-    <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-xl z-50">
-      <div className="px-3 py-2 flex items-center justify-between border-b dark:border-gray-700">
-        <span className="font-bold">通知</span>
-        <button onClick={()=>dispatch({type:'MARK_ALL_NOTIFICATIONS_READ'})} className="text-xs text-blue-600">全て既読</button>
+    <div className="absolute right-0 top-11 w-80 bg-white dark:bg-ink-800 hairline rounded-lg shadow-pop z-50 overflow-hidden">
+      <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-ink-100 dark:border-ink-700/60">
+        <span className="text-sm font-semibold">通知</span>
+        <button onClick={()=>dispatch({type:'MARK_ALL_NOTIFICATIONS_READ'})} className="text-xs text-accent-600 hover:underline">すべて既読にする</button>
       </div>
       <div className="max-h-80 overflow-y-auto scrollbar-thin">
-        {state.notifications.length === 0 && <p className="p-4 text-sm text-gray-500 text-center">通知はありません</p>}
+        {state.notifications.length === 0 && <p className="p-6 text-sm text-ink-400 text-center">通知はありません</p>}
         {state.notifications.map(n => (
           <button key={n.id} onClick={()=>{ dispatch({type:'MARK_NOTIFICATION_READ',id:n.id}); if (n.taskId) openTask(n.taskId); onClose(); }}
-            className={`w-full text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 border-b dark:border-gray-700 last:border-0 ${!n.read?'bg-blue-50 dark:bg-blue-900/20':''}`}>
-            <div className="text-sm">{n.text}</div>
-            <div className="text-xs text-gray-500">{fmtDateTime(n.createdAt)}</div>
+            className={`w-full text-left px-3.5 py-2.5 hover:bg-ink-50 dark:hover:bg-ink-700/40 border-b border-ink-100 dark:border-ink-700/60 last:border-0 ${!n.read?'bg-accent-50/40 dark:bg-accent-900/10':''}`}>
+            <div className="text-[13px] leading-relaxed">{n.text}</div>
+            <div className="text-[11px] text-ink-400 mt-0.5 num">{fmtDateTime(n.createdAt)}</div>
           </button>
         ))}
       </div>
@@ -865,19 +1018,20 @@ function UserMenu({ onClose }) {
   const { state, dispatch } = useApp();
   const org = state.organizations.find(o => o.id===state.currentOrgId);
   return (
-    <div className="absolute right-0 top-12 w-56 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-xl z-50">
-      <div className="p-3 border-b dark:border-gray-700">
-        <div className="text-xs text-gray-500 mb-1">ユーザー切替（デモ）</div>
+    <div className="absolute right-0 top-12 w-64 bg-white dark:bg-ink-800 hairline rounded-lg shadow-pop z-50 overflow-hidden">
+      <div className="px-3 py-2 border-b border-ink-100 dark:border-ink-700/60">
+        <div className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-1.5 px-1">ユーザーを切替（デモ用）</div>
         {org.members.map(m => (
           <button key={m.id} onClick={()=>{ dispatch({type:'SWITCH_USER',userId:m.id}); onClose(); }}
-            className={`w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${state.currentUserId===m.id?'bg-blue-50 dark:bg-blue-900/30':''}`}>
-            <span>{m.avatar}</span><span className="text-sm">{m.name}</span>
-            <span className="text-xs text-gray-500 ml-auto">{ORG_ROLES.find(r=>r.id===m.role)?.label}</span>
+            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-ink-100 dark:hover:bg-ink-700/40 ${state.currentUserId===m.id?'bg-accent-50 dark:bg-accent-900/30':''}`}>
+            <Avatar user={m} size={22} />
+            <span className="text-[13px]">{m.name}</span>
+            <span className="text-[10px] text-ink-400 ml-auto">{ORG_ROLES.find(r=>r.id===m.role)?.label}</span>
           </button>
         ))}
       </div>
       <button onClick={()=>{ if (confirm('全データをリセットしてサンプルに戻します。よろしいですか？')) { dispatch({type:'RESET_DATA'}); onClose(); } }}
-        className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">🔄 デモデータリセット</button>
+        className="w-full px-3 py-2 text-left text-[13px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">サンプルデータに戻す</button>
     </div>
   );
 }
@@ -895,106 +1049,127 @@ function Dashboard() {
 
   const myMentions = state.tasks.flatMap(t => t.comments.filter(c => c.text.includes(`@${currentUser?.name}`)).map(c => ({ task: t, comment: c })));
 
+  const today = new Date();
+  const greeting = today.getHours() < 11 ? 'おはようございます' : today.getHours() < 18 ? 'こんにちは' : 'お疲れさまです';
+  const dayLabel = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${'日月火水木金土'[today.getDay()]}）`;
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">📊 ダッシュボード</h1>
-        <span className="text-sm text-gray-500">{fmtDateTime(Date.now())}</span>
+    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-xs text-ink-400 num">{dayLabel}</div>
+          <h1 className="text-[22px] font-semibold tracking-tight mt-0.5">{greeting}、{currentUser?.name?.split(' ')[0] ?? ''}さん</h1>
+        </div>
+        <div className="text-right text-xs text-ink-500 num">
+          未完了 <span className="font-semibold text-ink-800 dark:text-ink-100 mx-0.5">{myTasks.length}</span> 件
+          <span className="mx-1.5 text-ink-300">/</span>
+          期限超過 <span className="font-semibold text-rose-600 mx-0.5">{overdue.length}</span> 件
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card title={`🎯 マイタスク（未完了${myTasks.length}件、期限切れ${overdue.length}件）`}>
-          {myTasks.length === 0 && <p className="text-sm text-gray-500">タスクはありません 🎉</p>}
-          <div className="space-y-1 max-h-96 overflow-y-auto scrollbar-thin">
-            {[...overdue, ...dueSoon, ...myTasks.filter(t => !t.dueDate)].slice(0,15).map(t => (
-              <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} />
-            ))}
-          </div>
-        </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-5">
+          <Card title="今日のタスク" subtitle={`担当している未完了タスク`} action={<Btn size="xs" variant="ghost" onClick={()=>dispatch({type:'SET_VIEW',view:'all-tasks'})}>すべて見る →</Btn>}>
+            {myTasks.length === 0 && <Empty>未完了のタスクはありません。</Empty>}
+            <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
+              {[...overdue, ...dueSoon, ...myTasks.filter(t => !t.dueDate)].slice(0,12).map(t => (
+                <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />
+              ))}
+            </div>
+          </Card>
 
-        <Card title={`📬 自分宛メンション（${myMentions.length}件）`}>
-          {myMentions.length === 0 && <p className="text-sm text-gray-500">メンションされたコメントはありません</p>}
-          <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-thin">
-            {myMentions.slice(0,10).map((m, i) => {
-              const u = userById(org, m.comment.userId);
-              return <button key={i} onClick={()=>openTask(m.task.id)} className="w-full text-left p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                <div className="flex items-center gap-2 text-xs text-gray-500"><Avatar user={u} size={20} />{u?.name} • {fmtDateTime(m.comment.createdAt)}</div>
-                <div className="text-sm mt-1">{m.comment.text}</div>
-                <div className="text-xs text-blue-600 mt-1">→ {m.task.title}</div>
-              </button>;
-            })}
-          </div>
-        </Card>
+          <Card title="自分宛のコメント" subtitle="メンションされた発言">
+            {myMentions.length === 0 && <Empty>新しいメンションはありません。</Empty>}
+            <div className="space-y-3">
+              {myMentions.slice(0,6).map((m, i) => {
+                const u = userById(org, m.comment.userId);
+                return <button key={i} onClick={()=>openTask(m.task.id)} className="w-full text-left p-3 rounded-md hover:bg-ink-50 dark:hover:bg-ink-700/30 transition">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-500"><Avatar user={u} size={20} />{u?.name}<span className="text-ink-300">·</span><span className="num">{fmtDateTime(m.comment.createdAt)}</span></div>
+                  <div className="text-[13px] mt-1.5 leading-relaxed">{m.comment.text}</div>
+                  <div className="text-[11px] text-accent-600 mt-1.5">› {m.task.title}</div>
+                </button>;
+              })}
+            </div>
+          </Card>
+        </div>
 
-        <Card title="📢 掲示板" action={
-          currentUser?.role!=='guest' && currentUser?.role!=='viewer' ?
-          <Btn size="xs" variant="ghost" onClick={()=>openModal('newAnnouncement')}>+ 投稿</Btn> : null
-        }>
-          {org.announcements.length === 0 && <p className="text-sm text-gray-500">お知らせはありません</p>}
-          <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin">
-            {org.announcements.map(a => {
-              const u = userById(org, a.createdBy);
-              return <div key={a.id} className="p-3 rounded border border-gray-200 dark:border-gray-700">
-                <div className="flex items-center justify-between mb-1">
-                  <h4 className="font-bold">{a.title}</h4>
-                  {currentUser?.id===a.createdBy && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_ANNOUNCEMENT',id:a.id});}} className="text-red-500 hover:text-red-700 text-xs">削除</button>}
+        <div className="space-y-5">
+          <Card title="プロジェクトの進み具合">
+            <div className="space-y-3.5">
+              {state.projects.filter(p=>!p.archived).map(p => {
+                const all = state.tasks.filter(t => t.projectId===p.id && !t.archived);
+                const done = all.filter(t => t.status==='completed');
+                const pct = all.length ? Math.round(done.length/all.length*100) : 0;
+                return <div key={p.id}>
+                  <div className="flex justify-between text-[12px] mb-1.5">
+                    <span className="flex items-center gap-1.5 truncate"><span className={`w-2 h-2 rounded-full bg-${p.color}-500`}></span>{p.name}</span>
+                    <span className="text-ink-400 num">{done.length}<span className="text-ink-300">/</span>{all.length}</span>
+                  </div>
+                  <div className="h-1.5 bg-ink-100 dark:bg-ink-700/50 rounded-full overflow-hidden">
+                    <div className={`h-full bg-${p.color}-500`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>;
+              })}
+            </div>
+          </Card>
+
+          <Card title="お知らせ" action={
+            currentUser?.role!=='guest' && currentUser?.role!=='viewer' ?
+            <Btn size="xs" variant="ghost" onClick={()=>openModal('newAnnouncement')}>＋投稿</Btn> : null
+          }>
+            {org.announcements.length === 0 && <Empty>お知らせはありません。</Empty>}
+            <div className="space-y-3.5">
+              {org.announcements.map(a => {
+                const u = userById(org, a.createdBy);
+                return <div key={a.id} className="text-[13px] leading-relaxed border-l-2 border-ink-200 dark:border-ink-700 pl-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-semibold">{a.title}</div>
+                    {currentUser?.id===a.createdBy && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_ANNOUNCEMENT',id:a.id});}} className="text-ink-400 hover:text-rose-600 text-[11px]">削除</button>}
+                  </div>
+                  <div className="text-[11px] text-ink-400 mt-0.5">{u?.name}<span className="mx-1.5 text-ink-300">·</span><span className="num">{fmtDateTime(a.createdAt)}</span></div>
+                  <div className="mt-1.5 text-ink-700 dark:text-ink-300"><Markdown text={a.body} /></div>
+                </div>;
+              })}
+            </div>
+          </Card>
+
+          <Card title="ブックマーク" action={
+            currentUser?.role==='admin' ? <Btn size="xs" variant="ghost" onClick={()=>openModal('newBookmark')}>＋追加</Btn> : null
+          }>
+            {org.bookmarks.length === 0 && <Empty>登録されていません。</Empty>}
+            <div className="space-y-1">
+              {org.bookmarks.map(b => (
+                <div key={b.id} className="group flex items-center gap-2 px-2 py-1 rounded hover:bg-ink-50 dark:hover:bg-ink-700/30">
+                  <span className="text-ink-300 text-xs">↗</span>
+                  <a href={b.url} target="_blank" rel="noreferrer" className="flex-1 text-[13px] hover:text-accent-600 hover:underline truncate">{b.title}</a>
+                  {currentUser?.role==='admin' && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_BOOKMARK',id:b.id});}} className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-rose-600 text-[11px]">×</button>}
                 </div>
-                <div className="text-xs text-gray-500 mb-2">{u?.name} • {fmtDateTime(a.createdAt)}</div>
-                <div className="text-sm"><Markdown text={a.body} /></div>
-              </div>;
-            })}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
 
-        <Card title="🔖 共有ブックマーク" action={
-          currentUser?.role==='admin' ? <Btn size="xs" variant="ghost" onClick={()=>openModal('newBookmark')}>+ 追加</Btn> : null
-        }>
-          {org.bookmarks.length === 0 && <p className="text-sm text-gray-500">登録されていません</p>}
-          <div className="space-y-1">
-            {org.bookmarks.map(b => (
-              <div key={b.id} className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700">
-                <span>🔗</span>
-                <a href={b.url} target="_blank" rel="noreferrer" className="flex-1 text-blue-600 text-sm hover:underline truncate">{b.title}</a>
-                {currentUser?.role==='admin' && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_BOOKMARK',id:b.id});}} className="text-red-500 text-xs">削除</button>}
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card title={`⭐ フォロー中（${followingTasks.length}件）`}>
-          {followingTasks.length === 0 && <p className="text-sm text-gray-500">フォロー中のタスクはありません</p>}
-          <div className="space-y-1 max-h-72 overflow-y-auto scrollbar-thin">
-            {followingTasks.slice(0,10).map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} />)}
-          </div>
-        </Card>
-
-        <Card title="📈 プロジェクト進捗">
-          <div className="space-y-3">
-            {state.projects.filter(p=>!p.archived).map(p => {
-              const all = state.tasks.filter(t => t.projectId===p.id && !t.archived);
-              const done = all.filter(t => t.status==='completed');
-              const pct = all.length ? Math.round(done.length/all.length*100) : 0;
-              return <div key={p.id}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="flex items-center gap-1">{p.icon} {p.name}</span>
-                  <span className="text-gray-500">{done.length}/{all.length} ({pct}%)</span>
-                </div>
-                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded">
-                  <div className={`h-full rounded bg-${p.color}-500`} style={{ width: `${pct}%` }} />
-                </div>
-              </div>;
-            })}
-          </div>
-        </Card>
+          {followingTasks.length > 0 && <Card title="フォロー中">
+            <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
+              {followingTasks.slice(0,6).map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />)}
+            </div>
+          </Card>}
+        </div>
       </div>
     </div>
   );
 }
 
-function Card({ title, children, action }) {
-  return <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4 border border-gray-200 dark:border-gray-700">
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="font-bold">{title}</h3>
+function Empty({ children }) {
+  return <p className="text-[13px] text-ink-400 py-4 text-center">{children}</p>;
+}
+
+function Card({ title, subtitle, children, action }) {
+  return <div className="bg-white dark:bg-ink-800 rounded-lg shadow-card hairline p-4">
+    <div className="flex items-end justify-between mb-3">
+      <div>
+        <h3 className="text-[13px] font-semibold tracking-tight">{title}</h3>
+        {subtitle && <div className="text-[11px] text-ink-400 mt-0.5">{subtitle}</div>}
+      </div>
       {action}
     </div>
     {children}
@@ -1004,18 +1179,24 @@ function Card({ title, children, action }) {
 function TaskRow({ task, onClick, showProject }) {
   const { state } = useApp();
   const proj = state.projects.find(p => p.id===task.projectId);
+  const org = state.organizations.find(o => o.id===proj?.orgId);
   const overdue = task.dueDate && isPastDate(task.dueDate) && task.status !== 'completed';
-  const dueToday = isTodayDate(task.dueDate);
-  const dueTomorrow = isTomorrow(task.dueDate);
-  const dateColor = overdue ? 'text-red-600 font-bold' : dueToday ? 'text-red-500' : dueTomorrow ? 'text-orange-500' : 'text-gray-500';
+  const dueToday = isTodayDate(task.dueDate) && task.status!=='completed';
+  const dueTomorrow = isTomorrow(task.dueDate) && task.status!=='completed';
+  const dateColor = overdue ? 'text-rose-600 font-semibold' : dueToday ? 'text-rose-500' : dueTomorrow ? 'text-amber-600' : 'text-ink-500';
   return (
-    <button onClick={onClick} className="w-full text-left flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
-      <span className={`w-1.5 h-1.5 rounded-full ${statusObj(task.status).dot}`}></span>
-      <span className="text-xs text-gray-400">#{task.taskNumber}</span>
-      <span className="flex-1 truncate text-sm">{task.title}</span>
-      {task.labels.slice(0,2).map(lid => { const l = labelById(proj, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
-      {task.dueDate && <span className={`text-xs ${dateColor}`}>{fmtDate(task.dueDate)}</span>}
-      {showProject && <span className="text-xs text-gray-400">{proj?.icon}</span>}
+    <button onClick={onClick} className="w-full text-left flex items-center gap-2.5 px-1.5 py-2 hover:bg-ink-50 dark:hover:bg-ink-700/30 rounded-md transition">
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusObj(task.status).dot}`}></span>
+      {showProject && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 bg-${proj?.color}-500`} title={proj?.name}></span>}
+      <span className="text-[11px] text-ink-400 num w-10 flex-shrink-0">#{String(task.taskNumber).padStart(3,'0')}</span>
+      <span className="flex-1 truncate text-[13px]">{task.title}</span>
+      <div className="hidden sm:flex items-center gap-1.5">
+        {task.labels.slice(0,2).map(lid => { const l = labelById(proj, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
+      </div>
+      <div className="flex -space-x-1">
+        {task.assignees.slice(0,2).map(u => <Avatar key={u} user={userById(org,u)} size={18} ring />)}
+      </div>
+      {task.dueDate && <span className={`text-[11px] num w-14 text-right ${dateColor}`}>{fmtDate(task.dueDate).slice(5)}</span>}
     </button>
   );
 }
@@ -1077,44 +1258,49 @@ function Board() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2 flex-wrap">
-        <h2 className="text-xl font-bold flex items-center gap-2">
-          {proj.icon} {proj.name}
-          <button onClick={()=>dispatch({type:'TOGGLE_FAVORITE_PROJECT',id:proj.id})} className={`text-lg ${proj.favorite?'text-yellow-500':'text-gray-300'}`}>★</button>
-        </h2>
-        <div className="ml-auto flex gap-1">
-          <Btn size="sm" variant={state.view==='board'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>カンバン</Btn>
-          <Btn size="sm" variant={state.view==='gantt'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'gantt'})}>ガント</Btn>
-          <Btn size="sm" variant={state.view==='project-settings'?'primary':'outline'} onClick={()=>dispatch({type:'SET_VIEW',view:'project-settings'})}>設定</Btn>
+      <div className="px-6 py-3.5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <span className={`w-2.5 h-2.5 rounded-full bg-${proj.color}-500`}></span>
+          <h2 className="text-[16px] font-semibold tracking-tight">{proj.name}</h2>
+          <button onClick={()=>dispatch({type:'TOGGLE_FAVORITE_PROJECT',id:proj.id})} className={`text-base hover:scale-110 transition ${proj.favorite?'text-amber-500':'text-ink-300 hover:text-amber-400'}`}>★</button>
+        </div>
+        <div className="ml-auto flex items-center gap-1 bg-ink-100 dark:bg-ink-700/40 rounded-md p-0.5">
+          {[['board','カンバン'],['gantt','ガント'],['project-settings','設定']].map(([k,l]) => (
+            <button key={k} onClick={()=>dispatch({type:'SET_VIEW',view:k})}
+              className={`px-3 py-1 text-[12px] rounded ${state.view===k?'bg-white dark:bg-ink-800 shadow-sm font-semibold':'text-ink-600 dark:text-ink-300 hover:text-ink-900'}`}>{l}</button>
+          ))}
         </div>
       </div>
 
-      <div className="px-4 py-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2 flex-wrap text-sm">
-        <input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="🔍 タスクを絞り込み"
-          className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700" />
+      <div className="px-6 py-2 border-b border-ink-200 dark:border-ink-700/60 bg-ink-50/60 dark:bg-ink-800/40 flex items-center gap-2 flex-wrap text-sm">
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400 text-xs">⌕</span>
+          <input value={filter.search} onChange={e=>setFilter({...filter,search:e.target.value})} placeholder="このボード内を検索"
+            className="pl-7 pr-2 py-1 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[12px] focus:outline-none focus:ring-2 focus:ring-accent-300 w-44" />
+        </div>
         <Select value={filter.assignee} onChange={v=>setFilter({...filter,assignee:v})} options={[
-          {value:'',label:'担当者: 全員'},
+          {value:'',label:'担当者：すべて'},
           ...state.organizations.find(o=>o.id===proj.orgId).members.map(m=>({value:m.id,label:m.name}))
         ]} />
         <Select value={filter.label} onChange={v=>setFilter({...filter,label:v})} options={[
-          {value:'',label:'ラベル: 全て'},
+          {value:'',label:'ラベル：すべて'},
           ...proj.labels.map(l=>({value:l.id,label:l.name}))
         ]} />
         <Select value={filter.status} onChange={v=>setFilter({...filter,status:v})} options={[
-          {value:'',label:'ステータス: 全て'},
+          {value:'',label:'ステータス：すべて'},
           ...STATUSES.map(s=>({value:s.id,label:s.label}))
         ]} />
-        <label className="flex items-center gap-1"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} /> フォロー中のみ</label>
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-600 dark:text-ink-300"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} className="accent-accent-600" /> フォロー中のみ</label>
         {(filter.search||filter.assignee||filter.label||filter.status||filter.followingOnly) &&
-          <Btn size="xs" variant="ghost" onClick={()=>setFilter({assignee:'',label:'',status:'',search:'',followingOnly:false})}>クリア</Btn>}
-        {bulkSelected.size > 0 && <>
-          <span className="ml-2 text-blue-600">{bulkSelected.size}件選択中</span>
+          <button onClick={()=>setFilter({assignee:'',label:'',status:'',search:'',followingOnly:false})} className="text-[11px] text-ink-500 hover:text-ink-800 underline">条件をリセット</button>}
+        {bulkSelected.size > 0 && <div className="ml-auto flex items-center gap-2 text-[12px]">
+          <span className="text-accent-700 dark:text-accent-300 font-medium">{bulkSelected.size}件選択中</span>
           <Btn size="xs" variant="danger" onClick={bulkArchive}>一括アーカイブ</Btn>
           <Btn size="xs" variant="ghost" onClick={()=>setBulkSelected(new Set())}>選択解除</Btn>
-        </>}
+        </div>}
       </div>
 
-      <div className="flex-1 overflow-x-auto p-4 scrollbar-thin">
+      <div className="flex-1 overflow-x-auto p-5 scrollbar-thin bg-ink-100/40 dark:bg-ink-900/40">
         <div className="flex gap-3 min-w-max h-full">
           {[...proj.lists].sort((a,b)=>a.order-b.order).map(list => (
             <BoardList key={list.id} list={list} project={proj}
@@ -1125,8 +1311,8 @@ function Board() {
           ))}
           <div className="w-72 flex-shrink-0">
             <button onClick={()=>openModal('newList')}
-              className="w-full p-3 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-white dark:hover:bg-gray-800 hover:border-blue-400">
-              + リストを追加
+              className="w-full p-3 rounded-md border border-dashed border-ink-300 dark:border-ink-700 text-ink-500 text-[13px] hover:bg-white dark:hover:bg-ink-800 hover:border-accent-400 hover:text-accent-600 transition">
+              ＋ リストを追加
             </button>
           </div>
         </div>
@@ -1175,35 +1361,35 @@ function BoardList({ list, project, tasks, onDragStart, onDrop, draggingTaskId, 
   };
 
   return (
-    <div className="w-72 flex-shrink-0 bg-gray-100 dark:bg-gray-800 rounded-lg flex flex-col max-h-full"
+    <div className="w-72 flex-shrink-0 bg-white dark:bg-ink-800 hairline rounded-md flex flex-col max-h-full shadow-card"
          onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={(e)=>onDrop(e,list.id)}>
-      <div className="p-3 flex items-center gap-2 border-b dark:border-gray-700">
-        {list.autoStatus && <span className={`w-2 h-2 rounded-full ${statusObj(list.autoStatus).color}`} title={`自動: ${statusObj(list.autoStatus).label}`}></span>}
+      <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-ink-100 dark:border-ink-700/60">
+        {list.autoStatus && <span className={`w-1.5 h-1.5 rounded-full ${statusObj(list.autoStatus).dot}`} title={`移動時に「${statusObj(list.autoStatus).label}」に自動設定`}></span>}
         {editing ? (
           <input autoFocus value={editName} onChange={e=>setEditName(e.target.value)} onBlur={saveListName} onKeyDown={e=>e.key==='Enter'&&saveListName()}
-            className="flex-1 px-2 py-1 rounded border border-blue-400 bg-white dark:bg-gray-700 text-sm" />
+            className="flex-1 px-1.5 py-0.5 rounded border border-accent-400 bg-white dark:bg-ink-700 text-[13px] focus:outline-none" />
         ) : (
-          <h3 onClick={()=>setEditing(true)} className="flex-1 font-bold text-sm cursor-pointer">{list.name}</h3>
+          <h3 onClick={()=>setEditing(true)} className="flex-1 font-semibold text-[13px] cursor-pointer tracking-tight">{list.name}</h3>
         )}
-        <span className="text-xs text-gray-500 bg-gray-200 dark:bg-gray-700 rounded px-1.5">{tasks.length}</span>
+        <span className="text-[11px] text-ink-400 num">{tasks.length}</span>
         <div className="relative">
-          <button onClick={()=>setShowMenu(!showMenu)} className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 px-1">⋯</button>
-          {showMenu && <div className="absolute right-0 top-7 w-56 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded shadow-lg z-30">
-            <div className="px-3 py-2 text-xs font-bold text-gray-500 border-b dark:border-gray-700">ステータス自動変更</div>
-            <button onClick={()=>setAutoStatus('')} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${!list.autoStatus?'bg-blue-50 dark:bg-blue-900/30':''}`}>なし</button>
+          <button onClick={()=>setShowMenu(!showMenu)} className="text-ink-400 hover:text-ink-800 dark:hover:text-ink-100 px-1 leading-none">⋯</button>
+          {showMenu && <div className="absolute right-0 top-7 w-56 bg-white dark:bg-ink-800 hairline rounded-md shadow-pop z-30 overflow-hidden">
+            <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-ink-400 border-b border-ink-100 dark:border-ink-700/60">移動時のステータス</div>
+            <button onClick={()=>setAutoStatus('')} className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-ink-50 dark:hover:bg-ink-700/40 ${!list.autoStatus?'bg-accent-50 dark:bg-accent-900/20':''}`}>変更しない</button>
             {STATUSES.map(s => (
-              <button key={s.id} onClick={()=>setAutoStatus(s.id)} className={`w-full text-left px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 ${list.autoStatus===s.id?'bg-blue-50 dark:bg-blue-900/30':''}`}>
-                <span className={`w-2 h-2 rounded-full ${s.color}`}></span>{s.label}
+              <button key={s.id} onClick={()=>setAutoStatus(s.id)} className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-ink-50 dark:hover:bg-ink-700/40 flex items-center gap-2 ${list.autoStatus===s.id?'bg-accent-50 dark:bg-accent-900/20':''}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`}></span>{s.label}
               </button>
             ))}
-            <div className="border-t dark:border-gray-700 mt-1">
-              <button onClick={deleteList} className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">🗑 リストを削除</button>
+            <div className="border-t border-ink-100 dark:border-ink-700/60">
+              <button onClick={deleteList} className="w-full text-left px-3 py-1.5 text-[13px] text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">リストを削除</button>
             </div>
           </div>}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-thin min-h-[100px]">
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2 scrollbar-thin min-h-[80px]">
         {tasks.map(t => (
           <BoardCard key={t.id} task={t} project={project}
             onClick={() => openTask(t.id)}
@@ -1213,22 +1399,22 @@ function BoardList({ list, project, tasks, onDragStart, onDrop, draggingTaskId, 
             onToggleSelect={(e) => { if (e.metaKey || e.ctrlKey) { e.preventDefault(); onToggleSelect(t.id); } }}
           />
         ))}
-        {tasks.length === 0 && <div className="text-center text-xs text-gray-400 py-4">ここにドロップ</div>}
+        {tasks.length === 0 && <div className="text-center text-[11px] text-ink-300 py-6">ここにドロップ</div>}
       </div>
 
-      <div className="p-2 border-t dark:border-gray-700">
+      <div className="px-2 pb-2 border-t border-ink-100 dark:border-ink-700/60 pt-1.5">
         {adding ? (
-          <div className="space-y-1">
-            <textarea autoFocus value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="タスク名" rows={2}
+          <div className="space-y-1.5">
+            <textarea autoFocus value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="タスク名を入力" rows={2}
               onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addTask();}}}
-              className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              className="w-full px-2 py-1.5 rounded border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-700 text-[13px] focus:outline-none focus:ring-2 focus:ring-accent-300 resize-none" />
             <div className="flex gap-1">
               <Btn size="xs" onClick={addTask}>追加</Btn>
               <Btn size="xs" variant="ghost" onClick={()=>{setAdding(false);setNewTitle('');}}>キャンセル</Btn>
             </div>
           </div>
         ) : (
-          <button onClick={()=>setAdding(true)} className="w-full text-left text-sm text-gray-500 hover:text-blue-600 px-2 py-1">+ カードを追加</button>
+          <button onClick={()=>setAdding(true)} className="w-full text-left text-[12px] text-ink-500 hover:text-accent-600 px-2 py-1">＋ カードを追加</button>
         )}
       </div>
     </div>
@@ -1236,7 +1422,7 @@ function BoardList({ list, project, tasks, onDragStart, onDrop, draggingTaskId, 
 }
 
 function BoardCard({ task, project, onClick, onDragStart, isDragging, isSelected, onToggleSelect }) {
-  const { state, dispatch } = useApp();
+  const { state } = useApp();
   const org = state.organizations.find(o => o.id===project.orgId);
   const overdue = task.dueDate && isPastDate(task.dueDate) && task.status!=='completed';
   const dueToday = isTodayDate(task.dueDate) && task.status!=='completed';
@@ -1247,27 +1433,33 @@ function BoardCard({ task, project, onClick, onDragStart, isDragging, isSelected
   return (
     <div draggable onDragStart={onDragStart}
       onClick={(e)=>{ if(e.metaKey||e.ctrlKey){ onToggleSelect(e); } else { onClick(); } }}
-      className={`bg-white dark:bg-gray-700 rounded shadow-sm p-2 cursor-pointer hover:shadow-md transition group ${isDragging?'card-dragging':''} ${isSelected?'selected-card':''}`}>
-      {task.labels.length > 0 && <div className="flex flex-wrap gap-0.5 mb-1">
+      className={`bg-white dark:bg-ink-700/80 rounded-md hairline px-2.5 py-2 cursor-pointer hover:shadow-card transition group ${isDragging?'card-dragging':''} ${isSelected?'selected-card':''}`}>
+      {task.labels.length > 0 && <div className="flex flex-wrap gap-1 mb-1.5">
         {task.labels.map(lid => { const l = labelById(project, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
       </div>}
-      <div className="flex items-start gap-1">
-        <span className="text-xs text-gray-400 mt-0.5">#{task.taskNumber}</span>
-        <span className="flex-1 text-sm font-medium leading-snug">{task.title}</span>
-        {followed && <span className="text-yellow-500 text-xs">★</span>}
+      <div className="flex items-start gap-1.5">
+        <span className="text-[10px] text-ink-400 mt-0.5 num">#{String(task.taskNumber).padStart(3,'0')}</span>
+        <span className="flex-1 text-[13px] leading-snug">{task.title}</span>
+        {followed && <span className="text-amber-500 text-[11px] mt-0.5">★</span>}
       </div>
-      <div className="flex items-center justify-between mt-2 text-xs">
-        <div className="flex items-center gap-1.5 text-gray-500">
-          {task.dueDate && <span className={`flex items-center gap-1 ${overdue?'text-red-600 font-bold':dueToday?'text-red-500':dueTomorrow?'text-orange-500':''}`}>📅 {fmtDate(task.dueDate)}</span>}
-          {task.checklist.length > 0 && <span>☑ {checklistDone}/{task.checklist.length}</span>}
-          {task.comments.length > 0 && <span>💬 {task.comments.length}</span>}
-          {task.files.length > 0 && <span>📎 {task.files.length}</span>}
+      {(task.dueDate || task.checklist.length>0 || task.comments.length>0 || task.files.length>0 || task.assignees.length>0) &&
+      <div className="flex items-center justify-between mt-2 text-[11px]">
+        <div className="flex items-center gap-2 text-ink-500 num">
+          {task.dueDate && <span className={`flex items-center gap-1 ${overdue?'text-rose-600 font-semibold':dueToday?'text-rose-500':dueTomorrow?'text-amber-600':''}`}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            {fmtDate(task.dueDate).slice(5)}
+          </span>}
+          {task.checklist.length > 0 && <span title="チェックリスト">☑ {checklistDone}/{task.checklist.length}</span>}
+          {task.comments.length > 0 && <span title="コメント">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="inline mr-0.5 -mt-0.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            {task.comments.length}</span>}
+          {task.files.length > 0 && <span title="添付">📎 {task.files.length}</span>}
         </div>
-        <div className="flex -space-x-1">
-          {task.assignees.slice(0,3).map(uid => <Avatar key={uid} user={userById(org,uid)} size={20} />)}
-          {task.assignees.length > 3 && <span className="text-xs">+{task.assignees.length-3}</span>}
+        <div className="flex -space-x-1.5">
+          {task.assignees.slice(0,3).map(uid => <Avatar key={uid} user={userById(org,uid)} size={20} ring />)}
+          {task.assignees.length > 3 && <span className="text-[10px] text-ink-500 ml-1 num">+{task.assignees.length-3}</span>}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -1300,46 +1492,50 @@ function TaskModal({ taskId, onClose }) {
 
   return (
     <Modal open={true} onClose={onClose} size="xl" title={null}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-start gap-2">
-            <span className="text-gray-400 text-sm mt-1">#{task.taskNumber}</span>
-            {editingTitle ? (
-              <input autoFocus value={titleBuf} onChange={e=>setTitleBuf(e.target.value)}
-                onBlur={()=>{ if(titleBuf.trim() && titleBuf!==task.title) update({title:titleBuf.trim()}); setEditingTitle(false); }}
-                onKeyDown={e=>e.key==='Enter'&&e.target.blur()}
-                className="flex-1 text-xl font-bold px-2 py-1 rounded border border-blue-400 bg-white dark:bg-gray-700" />
-            ) : (
-              <h2 onClick={()=>setEditingTitle(true)} className="flex-1 text-xl font-bold cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 px-1 rounded">{task.title}</h2>
-            )}
-            <button onClick={()=>dispatch({type:'TOGGLE_FOLLOW',id:task.id})}
-              className={`text-2xl ${followed?'text-yellow-500':'text-gray-300 hover:text-yellow-400'}`} title="フォロー">★</button>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>{proj.icon} {proj.name}</span>
-            <span>›</span>
-            <span>{list?.name}</span>
-            <span>•</span>
-            <span>更新: {fmtDateTime(task.updatedAt)}</span>
+        <div className="lg:col-span-2 space-y-5">
+          <div>
+            <div className="flex items-center gap-2 text-[11px] text-ink-500 mb-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full bg-${proj.color}-500`}></span>
+              <span>{proj.name}</span>
+              <span className="text-ink-300">›</span>
+              <span>{list?.name}</span>
+              <span className="text-ink-300 mx-1">·</span>
+              <span className="num">#{String(task.taskNumber).padStart(3,'0')}</span>
+              <span className="text-ink-300 mx-1">·</span>
+              <span className="num">最終更新 {fmtDateTime(task.updatedAt)}</span>
+            </div>
+            <div className="flex items-start gap-2">
+              {editingTitle ? (
+                <input autoFocus value={titleBuf} onChange={e=>setTitleBuf(e.target.value)}
+                  onBlur={()=>{ if(titleBuf.trim() && titleBuf!==task.title) update({title:titleBuf.trim()}); setEditingTitle(false); }}
+                  onKeyDown={e=>e.key==='Enter'&&e.target.blur()}
+                  className="flex-1 text-xl font-semibold tracking-tight px-2 py-1 rounded-md border border-accent-400 bg-white dark:bg-ink-700" />
+              ) : (
+                <h2 onClick={()=>setEditingTitle(true)} className="flex-1 text-xl font-semibold tracking-tight cursor-text hover:bg-ink-50 dark:hover:bg-ink-700/50 px-1 -mx-1 rounded">{task.title}</h2>
+              )}
+              <button onClick={()=>dispatch({type:'TOGGLE_FOLLOW',id:task.id})}
+                className={`text-xl ${followed?'text-amber-500':'text-ink-300 hover:text-amber-400'}`} title="フォロー">★</button>
+            </div>
           </div>
 
           {/* Description */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-bold text-sm">📄 説明（マークダウン対応）</h3>
-              {!editingDesc && <button onClick={()=>setEditingDesc(true)} className="text-xs text-blue-600">編集</button>}
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">説明</h3>
+              {!editingDesc && <button onClick={()=>setEditingDesc(true)} className="text-[11px] text-accent-600 hover:underline">編集</button>}
             </div>
             {editingDesc ? (
               <div>
-                <Textarea value={descBuf} onChange={setDescBuf} rows={6} placeholder="マークダウンで説明を入力..." />
+                <Textarea value={descBuf} onChange={setDescBuf} rows={7} placeholder="マークダウンで記述できます" />
                 <div className="flex gap-2 mt-2">
                   <Btn size="sm" onClick={()=>{ update({description:descBuf}); setEditingDesc(false); }}>保存</Btn>
                   <Btn size="sm" variant="ghost" onClick={()=>{ setDescBuf(task.description||''); setEditingDesc(false); }}>キャンセル</Btn>
                 </div>
               </div>
             ) : (
-              <div onClick={()=>setEditingDesc(true)} className="p-3 rounded bg-gray-50 dark:bg-gray-700 cursor-pointer min-h-[80px]">
+              <div onClick={()=>setEditingDesc(true)} className="p-3 rounded-md bg-ink-50 dark:bg-ink-700/40 cursor-text min-h-[64px] text-[13px]">
                 <Markdown text={task.description} />
               </div>
             )}
@@ -1347,50 +1543,58 @@ function TaskModal({ taskId, onClose }) {
 
           {/* Checklist */}
           <div>
-            <h3 className="font-bold text-sm mb-1">☑ チェックリスト ({task.checklist.filter(c=>c.done).length}/{task.checklist.length})</h3>
-            {task.checklist.length > 0 && <div className="h-1.5 bg-gray-200 dark:bg-gray-700 rounded mb-2">
-              <div className="h-full rounded bg-green-500" style={{width: task.checklist.length ? `${task.checklist.filter(c=>c.done).length/task.checklist.length*100}%` : 0}} />
+            <div className="flex items-center justify-between mb-1.5">
+              <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">チェックリスト</h3>
+              {task.checklist.length>0 && <span className="text-[11px] text-ink-500 num">{task.checklist.filter(c=>c.done).length}<span className="text-ink-300">/</span>{task.checklist.length}</span>}
+            </div>
+            {task.checklist.length > 0 && <div className="h-1 bg-ink-100 dark:bg-ink-700/50 rounded-full mb-2.5 overflow-hidden">
+              <div className="h-full bg-emerald-500 transition-all" style={{width: task.checklist.length ? `${task.checklist.filter(c=>c.done).length/task.checklist.length*100}%` : 0}} />
             </div>}
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {task.checklist.map(c => (
                 <ChecklistItem key={c.id} item={c} task={task} org={org} />
               ))}
             </div>
             <div className="flex gap-1 mt-2">
-              <Input value={newChecklistText} onChange={setNewChecklistText} placeholder="新しい項目..." />
+              <Input value={newChecklistText} onChange={setNewChecklistText} placeholder="項目を追加" />
               <Btn size="sm" onClick={()=>{ if(newChecklistText.trim()){dispatch({type:'ADD_CHECKLIST_ITEM',taskId:task.id,text:newChecklistText.trim()});setNewChecklistText('');} }}>追加</Btn>
             </div>
           </div>
 
           {/* Comments */}
           <div>
-            <h3 className="font-bold text-sm mb-2">💬 コメント ({task.comments.length})</h3>
-            <div className="space-y-2 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">コメント</h3>
+              <span className="text-[11px] text-ink-500 num">{task.comments.length}件</span>
+            </div>
+            <div className="space-y-3 mb-4">
               {sortedComments.map(c => {
                 const u = userById(org, c.userId);
-                return <div key={c.id} className="flex gap-2">
+                return <div key={c.id} className="flex gap-2.5 group">
                   <Avatar user={u} size={28} />
-                  <div className="flex-1 bg-gray-50 dark:bg-gray-700 rounded p-2">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                      <span><b>{u?.name}</b> • {fmtDateTime(c.createdAt)}</span>
-                      {c.userId===state.currentUserId && <button onClick={()=>{if(confirm('削除しますか？'))dispatch({type:'DELETE_COMMENT',taskId:task.id,commentId:c.id});}} className="text-red-500">削除</button>}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 text-[11px] text-ink-500 mb-1">
+                      <span className="font-semibold text-ink-700 dark:text-ink-200">{u?.name}</span>
+                      <span className="text-ink-300">·</span>
+                      <span className="num">{fmtDateTime(c.createdAt)}</span>
+                      {c.userId===state.currentUserId && <button onClick={()=>{if(confirm('削除しますか？'))dispatch({type:'DELETE_COMMENT',taskId:task.id,commentId:c.id});}} className="ml-auto text-ink-400 hover:text-rose-600 opacity-0 group-hover:opacity-100">削除</button>}
                     </div>
-                    <div className="text-sm whitespace-pre-wrap">{c.text}</div>
+                    <div className="text-[13px] leading-relaxed whitespace-pre-wrap bg-ink-50 dark:bg-ink-700/40 rounded-md px-3 py-2">{c.text}</div>
                   </div>
                 </div>;
               })}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               <Avatar user={currentUser} size={28} />
               <div className="flex-1">
-                <Textarea value={newComment} onChange={setNewComment} placeholder="コメントを書く... (@でメンション)" rows={2} />
-                <div className="flex justify-between mt-1">
-                  <div className="flex gap-1 text-xs">
-                    <button onClick={()=>setNewComment(newComment+'@'+currentUser?.name+' ')} className="text-blue-600">@メンション</button>
+                <Textarea value={newComment} onChange={setNewComment} placeholder={`コメントを書く（${currentUser?.name?.split(' ')[0]}として投稿）`} rows={2} />
+                <div className="flex justify-between mt-1.5">
+                  <div className="flex gap-2.5 text-[11px]">
+                    <button onClick={()=>setNewComment(newComment+'@'+currentUser?.name+' ')} className="text-ink-500 hover:text-accent-600">@自分</button>
                     <button onClick={()=>{
                       const allMembers = proj.members.map(m => userById(org, m.userId)?.name).filter(Boolean);
                       setNewComment(newComment + allMembers.map(n => '@'+n).join(' ') + ' ');
-                    }} className="text-blue-600">@全員</button>
+                    }} className="text-ink-500 hover:text-accent-600">@チーム全員</button>
                   </div>
                   <Btn size="sm" onClick={()=>{ if(newComment.trim()){dispatch({type:'ADD_COMMENT',taskId:task.id,text:newComment.trim()});setNewComment('');setMsg('コメントを投稿しました');} }}>送信</Btn>
                 </div>
@@ -1400,87 +1604,88 @@ function TaskModal({ taskId, onClose }) {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4">
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">ステータス</h4>
+        <div className="space-y-4 lg:border-l lg:border-ink-100 lg:dark:border-ink-700/60 lg:pl-6">
+          <SideField label="ステータス">
             <Select value={task.status} onChange={v=>update({status:v})} className="w-full"
               options={STATUSES.map(s=>({value:s.id,label:s.label}))} />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">リスト</h4>
+          </SideField>
+          <SideField label="リスト">
             <Select value={task.listId} onChange={v=>dispatch({type:'MOVE_TASK',id:task.id,listId:v})} className="w-full"
               options={proj.lists.map(l=>({value:l.id,label:l.name}))} />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">担当者</h4>
-            <div className="flex flex-wrap gap-1 mb-1">
+          </SideField>
+          <SideField label="担当者">
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
               {task.assignees.map(uid => {
                 const u = userById(org,uid);
-                return <span key={uid} className="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded px-2 py-0.5 text-xs">
+                return <span key={uid} className="inline-flex items-center gap-1.5 bg-ink-100 dark:bg-ink-700/50 rounded px-1.5 py-0.5 text-[12px]">
                   <Avatar user={u} size={18} />{u?.name}
-                  <button onClick={()=>update({assignees:task.assignees.filter(x=>x!==uid)})} className="text-gray-400 hover:text-red-500">×</button>
+                  <button onClick={()=>update({assignees:task.assignees.filter(x=>x!==uid)})} className="text-ink-400 hover:text-rose-500">×</button>
                 </span>;
               })}
             </div>
-            <button onClick={()=>setShowAssigneePicker(!showAssigneePicker)} className="text-xs text-blue-600">+ 追加</button>
-            {showAssigneePicker && <div className="mt-1 p-2 border dark:border-gray-700 rounded max-h-40 overflow-y-auto">
+            <button onClick={()=>setShowAssigneePicker(!showAssigneePicker)} className="text-[12px] text-accent-600 hover:underline">＋ 担当者を追加</button>
+            {showAssigneePicker && <div className="mt-1.5 p-1 hairline rounded-md max-h-40 overflow-y-auto bg-white dark:bg-ink-800">
               {proj.members.map(m => {
                 const u = userById(org, m.userId);
                 if (!u || task.assignees.includes(u.id)) return null;
                 return <button key={u.id} onClick={()=>{update({assignees:[...task.assignees,u.id]}); setShowAssigneePicker(false);}}
-                  className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-ink-50 dark:hover:bg-ink-700/40 text-[13px]">
                   <Avatar user={u} size={20} /> {u.name}
                 </button>;
               })}
             </div>}
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">期間</h4>
-            <div className="space-y-1">
+          </SideField>
+          <SideField label="期間">
+            <div className="grid grid-cols-2 gap-1.5">
               <input type="date" value={task.startDate||''} onChange={e=>update({startDate:e.target.value||null})}
-                className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                className="px-2 py-1 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[12px] num" />
               <input type="date" value={task.dueDate||''} onChange={e=>update({dueDate:e.target.value||null})}
-                className="w-full px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                className="px-2 py-1 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[12px] num" />
             </div>
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">ラベル（最大4）</h4>
-            <div className="flex flex-wrap gap-1 mb-1">
+          </SideField>
+          <SideField label={`ラベル（${task.labels.length}/4）`}>
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
               {task.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} removable onRemove={()=>update({labels:task.labels.filter(x=>x!==lid)})} />)}
             </div>
-            <button onClick={()=>setShowLabelPicker(!showLabelPicker)} className="text-xs text-blue-600">+ 追加</button>
-            {showLabelPicker && <div className="mt-1 p-2 border dark:border-gray-700 rounded max-h-40 overflow-y-auto">
+            <button onClick={()=>setShowLabelPicker(!showLabelPicker)} className="text-[12px] text-accent-600 hover:underline">＋ ラベルを付ける</button>
+            {showLabelPicker && <div className="mt-1.5 p-1 hairline rounded-md max-h-40 overflow-y-auto bg-white dark:bg-ink-800">
               {proj.labels.filter(l=>!task.labels.includes(l.id)).map(l => (
                 <button key={l.id} onClick={()=>{ if(task.labels.length<4){ update({labels:[...task.labels,l.id]}); setShowLabelPicker(false); } else { alert('ラベルは最大4個まで'); } }}
-                  className="block w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-sm">
+                  className="block w-full text-left px-2 py-1.5 rounded hover:bg-ink-50 dark:hover:bg-ink-700/40">
                   <LabelPill label={l} />
                 </button>
               ))}
             </div>}
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-gray-500 mb-1">📎 ファイル ({task.files.length})</h4>
+          </SideField>
+          <SideField label={`添付ファイル（${task.files.length}）`}>
             <div className="space-y-1">
-              {task.files.map((f,i) => <div key={i} className="flex items-center justify-between text-xs bg-gray-50 dark:bg-gray-700 rounded px-2 py-1">
-                <span>📄 {f.name}</span>
-                <button onClick={()=>update({files:task.files.filter((_,j)=>j!==i)})} className="text-red-500">×</button>
+              {task.files.map((f,i) => <div key={i} className="flex items-center justify-between text-[12px] bg-ink-50 dark:bg-ink-700/40 rounded px-2 py-1">
+                <span className="truncate">{f.name}</span>
+                <button onClick={()=>update({files:task.files.filter((_,j)=>j!==i)})} className="text-ink-400 hover:text-rose-500 ml-2">×</button>
               </div>)}
               <input type="file" multiple onChange={e=>{
                 const files = [...e.target.files].map(f => ({ name: f.name, size: f.size }));
                 update({files: [...task.files, ...files]});
-              }} className="text-xs" />
-              <p className="text-[10px] text-gray-400">※ デモのためファイル名のみ記録します</p>
+              }} className="text-[11px] text-ink-500 file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-ink-100 file:text-ink-700 dark:file:bg-ink-700 dark:file:text-ink-200 file:text-[11px]" />
+              <p className="text-[10px] text-ink-400">※ デモのためファイル名のみ保持されます</p>
             </div>
-          </div>
-          <div className="border-t dark:border-gray-700 pt-3 space-y-1">
-            <Btn size="sm" variant="outline" className="w-full" onClick={()=>{dispatch({type:'DUPLICATE_TASK',id:task.id}); setMsg('タスクを複製しました'); onClose();}}>📋 複製</Btn>
-            <Btn size="sm" variant="outline" className="w-full" onClick={()=>{ if(confirm('アーカイブしますか？')){dispatch({type:'ARCHIVE_TASK',id:task.id});onClose();} }}>📦 アーカイブ</Btn>
-            <Btn size="sm" variant="danger" className="w-full" onClick={()=>{ if(confirm('完全に削除しますか？取り消せません。')){dispatch({type:'DELETE_TASK',id:task.id});onClose();} }}>🗑 削除</Btn>
+          </SideField>
+          <div className="border-t border-ink-100 dark:border-ink-700/60 pt-3 space-y-1.5">
+            <Btn size="sm" variant="outline" className="w-full justify-center" onClick={()=>{dispatch({type:'DUPLICATE_TASK',id:task.id}); setMsg('タスクを複製しました'); onClose();}}>このタスクを複製</Btn>
+            <Btn size="sm" variant="outline" className="w-full justify-center" onClick={()=>{ if(confirm('このタスクをアーカイブしますか？')){dispatch({type:'ARCHIVE_TASK',id:task.id});onClose();} }}>アーカイブ</Btn>
+            <Btn size="sm" variant="danger" className="w-full justify-center" onClick={()=>{ if(confirm('このタスクを完全に削除します。元には戻せません。よろしいですか？')){dispatch({type:'DELETE_TASK',id:task.id});onClose();} }}>削除</Btn>
           </div>
         </div>
       </div>
     </Modal>
   );
+}
+
+function SideField({ label, children }) {
+  return <div>
+    <h4 className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold mb-1.5">{label}</h4>
+    {children}
+  </div>;
 }
 
 function ChecklistItem({ item, task, org }) {
@@ -1489,26 +1694,27 @@ function ChecklistItem({ item, task, org }) {
   const [text, setText] = useState(item.text);
   const [showDates, setShowDates] = useState(false);
   return (
-    <div className="flex items-start gap-2 p-1 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded">
+    <div className="flex items-start gap-2 px-1 py-1 hover:bg-ink-50 dark:hover:bg-ink-700/30 rounded group">
       <input type="checkbox" checked={item.done} onChange={()=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{done:!item.done}})}
-        className="mt-1" />
+        className="mt-1 accent-emerald-600" />
       <div className="flex-1">
         {editing ? (
           <input autoFocus value={text} onChange={e=>setText(e.target.value)} onBlur={()=>{dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{text}}); setEditing(false);}}
             onKeyDown={e=>e.key==='Enter'&&e.target.blur()}
-            className="w-full px-1 py-0.5 rounded border border-blue-400 bg-white dark:bg-gray-700 text-sm" />
+            className="w-full px-1.5 py-0.5 rounded border border-accent-400 bg-white dark:bg-ink-700 text-[13px] focus:outline-none" />
         ) : (
-          <div onClick={()=>setEditing(true)} className={`text-sm cursor-pointer ${item.done?'line-through text-gray-400':''}`}>{item.text}</div>
+          <div onClick={()=>setEditing(true)} className={`text-[13px] cursor-text ${item.done?'line-through text-ink-400':''}`}>{item.text}</div>
         )}
-        {(item.dueDate || showDates) && <div className="flex items-center gap-2 mt-1 text-xs">
+        {(item.dueDate || item.startDate || showDates) && <div className="flex items-center gap-1.5 mt-1 text-[11px] num">
           <input type="date" value={item.startDate||''} onChange={e=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{startDate:e.target.value||null}})}
-            className="px-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700" />
+            className="px-1 rounded border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800" />
+          <span className="text-ink-300">〜</span>
           <input type="date" value={item.dueDate||''} onChange={e=>dispatch({type:'UPDATE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id,patch:{dueDate:e.target.value||null}})}
-            className="px-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700" />
+            className="px-1 rounded border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800" />
         </div>}
       </div>
-      <button onClick={()=>setShowDates(!showDates)} className="text-gray-400 text-xs">📅</button>
-      <button onClick={()=>{if(confirm('削除しますか？'))dispatch({type:'DELETE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id});}} className="text-gray-400 hover:text-red-500 text-xs">×</button>
+      <button onClick={()=>setShowDates(!showDates)} title="期間を設定" className="text-ink-300 hover:text-ink-600 text-[11px] opacity-0 group-hover:opacity-100">期日</button>
+      <button onClick={()=>{if(confirm('この項目を削除しますか？'))dispatch({type:'DELETE_CHECKLIST_ITEM',taskId:task.id,itemId:item.id});}} className="text-ink-300 hover:text-rose-500 text-[14px] leading-none opacity-0 group-hover:opacity-100">×</button>
     </div>
   );
 }
@@ -1545,19 +1751,20 @@ function GanttView({ projectId, allProjects }) {
   for (let i=0; i<=totalDays; i++) dayStrs.push(addDays(startD, i));
 
   return (
-    <div className="flex-1 overflow-auto scrollbar-thin">
+    <div className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
       <div style={{ minWidth: (totalDays+1)*dayWidth + 240 }}>
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex">
-          <div className="w-60 p-2 border-r dark:border-gray-700 font-bold text-sm">タスク</div>
+        <div className="sticky top-0 z-10 bg-white dark:bg-ink-800 border-b border-ink-200 dark:border-ink-700/60 flex shadow-sm">
+          <div className="w-60 px-3 py-2 border-r border-ink-200 dark:border-ink-700/60 text-[11px] uppercase tracking-wider text-ink-400 font-semibold">タスク</div>
           <div className="flex">
             {dayStrs.map(d => {
               const dt = new Date(d);
               const holiday = isHoliday(d);
-              const todayCl = d===today() ? 'bg-blue-100 dark:bg-blue-900/30 font-bold' : '';
-              return <div key={d} className={`text-center text-[10px] border-r dark:border-gray-700 ${holiday?'bg-red-50 dark:bg-red-900/20':''} ${todayCl}`} style={{ width: dayWidth }}>
+              const todayCl = d===today() ? 'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200 font-semibold' : '';
+              const dayColor = dt.getDay()===0 ? 'text-rose-500' : dt.getDay()===6 ? 'text-sky-500' : 'text-ink-400';
+              return <div key={d} className={`text-center text-[10px] border-r border-ink-100 dark:border-ink-700/40 num py-1 ${holiday&&!todayCl?'bg-rose-50/60 dark:bg-rose-900/15':''} ${todayCl}`} style={{ width: dayWidth }}>
                 <div>{dt.getMonth()+1}/{dt.getDate()}</div>
-                <div className="text-gray-400">{['日','月','火','水','木','金','土'][dt.getDay()]}</div>
+                <div className={dayColor}>{'日月火水木金土'[dt.getDay()]}</div>
               </div>;
             })}
           </div>
@@ -1567,28 +1774,28 @@ function GanttView({ projectId, allProjects }) {
           const projTasks = allTasks.filter(t => t.projectId===proj.id).sort((a,b)=>a.startDate.localeCompare(b.startDate));
           if (projTasks.length === 0) return null;
           return <Fragment key={proj.id}>
-            <div className="bg-gray-100 dark:bg-gray-800 border-b dark:border-gray-700 px-2 py-1 font-bold text-sm flex items-center gap-1">
-              {proj.icon} {proj.name}
+            <div className="bg-ink-50 dark:bg-ink-900/40 border-b border-ink-100 dark:border-ink-700/60 px-3 py-1.5 text-[12px] font-semibold flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full bg-${proj.color}-500`}></span>{proj.name}
             </div>
             {projTasks.map(t => {
               const startOff = daysBetween(startD, t.startDate);
               const dur = daysBetween(t.startDate, t.dueDate) + 1;
               const overdue = isPastDate(t.dueDate) && t.status!=='completed';
               const sObj = statusObj(t.status);
-              return <div key={t.id} className="flex border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                <div className="w-60 p-2 border-r dark:border-gray-700 text-sm truncate">
-                  <button onClick={()=>openTask(t.id)} className="text-left hover:text-blue-600">
-                    <span className="text-xs text-gray-400 mr-1">#{t.taskNumber}</span>{t.title}
+              return <div key={t.id} className="flex border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50/60 dark:hover:bg-ink-700/20">
+                <div className="w-60 px-3 py-2 border-r border-ink-100 dark:border-ink-700/40 text-[13px] truncate">
+                  <button onClick={()=>openTask(t.id)} className="text-left hover:text-accent-600 truncate w-full">
+                    <span className="text-[10px] text-ink-400 mr-1.5 num">#{String(t.taskNumber).padStart(3,'0')}</span>{t.title}
                   </button>
                 </div>
                 <div className="relative flex" style={{ width: (totalDays+1)*dayWidth }}>
                   {dayStrs.map(d => (
-                    <div key={d} className={`border-r dark:border-gray-700 ${isHoliday(d)?'bg-red-50 dark:bg-red-900/10':''} ${d===today()?'bg-blue-50 dark:bg-blue-900/10':''}`} style={{ width: dayWidth, height: 32 }} />
+                    <div key={d} className={`border-r border-ink-100 dark:border-ink-700/40 ${isHoliday(d)?'bg-rose-50/40 dark:bg-rose-900/10':''} ${d===today()?'bg-accent-50/60 dark:bg-accent-900/15':''}`} style={{ width: dayWidth, height: 32 }} />
                   ))}
-                  <button onClick={()=>openTask(t.id)} title={`${t.title} (${t.startDate}〜${t.dueDate})`}
-                    className={`gantt-bar absolute top-1 h-6 rounded ${sObj.color} text-white text-xs px-2 flex items-center overflow-hidden ${overdue?'ring-2 ring-red-600':''}`}
+                  <button onClick={()=>openTask(t.id)} title={`${t.title}（${t.startDate}〜${t.dueDate}）`}
+                    className={`gantt-bar absolute top-1.5 h-5 rounded ${sObj.color} text-white text-[11px] px-2 flex items-center overflow-hidden ${overdue?'ring-1 ring-rose-600 ring-offset-1':''}`}
                     style={{ left: startOff*dayWidth+2, width: dur*dayWidth-4 }}>
-                    {t.title}
+                    <span className="truncate">{t.title}</span>
                   </button>
                 </div>
               </div>;
@@ -1648,51 +1855,54 @@ function AllTasksView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2 flex-wrap">
-        <h2 className="text-xl font-bold">📝 全てのタスク（{tasks.length}件）</h2>
-        <div className="ml-auto flex gap-1">
-          <Btn size="sm" variant="outline" onClick={exportCSV}>📤 CSVエクスポート</Btn>
+      <div className="px-6 py-3.5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex items-center gap-2 flex-wrap">
+        <div>
+          <h2 className="text-[16px] font-semibold tracking-tight">全てのタスク</h2>
+          <div className="text-[11px] text-ink-400 num mt-0.5">{tasks.length}件</div>
+        </div>
+        <div className="ml-auto flex gap-2">
+          <Btn size="sm" variant="outline" onClick={exportCSV}>CSV エクスポート</Btn>
         </div>
       </div>
-      <div className="px-4 py-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center gap-2 flex-wrap text-sm">
+      <div className="px-6 py-2 border-b border-ink-200 dark:border-ink-700/60 bg-ink-50/60 dark:bg-ink-800/40 flex items-center gap-2 flex-wrap text-sm">
         <Select value={filter.projectId} onChange={v=>setFilter({...filter,projectId:v})} options={[
-          {value:'',label:'プロジェクト: 全て'},
+          {value:'',label:'プロジェクト：すべて'},
           ...state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))
         ]} />
         <Select value={filter.assignee} onChange={v=>setFilter({...filter,assignee:v})} options={[
-          {value:'',label:'担当者: 全員'},
+          {value:'',label:'担当者：すべて'},
           ...state.organizations.find(o=>o.id===state.currentOrgId).members.map(m=>({value:m.id,label:m.name}))
         ]} />
         <Select value={filter.status} onChange={v=>setFilter({...filter,status:v})} options={[
-          {value:'',label:'ステータス: 全て'},
+          {value:'',label:'ステータス：すべて'},
           ...STATUSES.map(s=>({value:s.id,label:s.label}))
         ]} />
         <Select value={filter.period} onChange={v=>setFilter({...filter,period:v})} options={[
-          {value:'all',label:'期間: 全て'},
+          {value:'all',label:'期間：指定なし'},
           {value:'overdue',label:'期限切れ'},
-          {value:'today',label:'今日'},
+          {value:'today',label:'今日が締切'},
           {value:'week',label:'今週中'},
           {value:'month',label:'今月中'},
         ]} />
         <Select value={filter.hasDate} onChange={v=>setFilter({...filter,hasDate:v})} options={[
-          {value:'all',label:'日付: 全て'},
-          {value:'dated',label:'日付あり'},
-          {value:'none',label:'期間なし'},
+          {value:'all',label:'日付：すべて'},
+          {value:'dated',label:'期日あり'},
+          {value:'none',label:'期日なし'},
         ]} />
-        <label className="flex items-center gap-1"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} /> フォロー中のみ</label>
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-600 dark:text-ink-300"><input type="checkbox" checked={filter.followingOnly} onChange={e=>setFilter({...filter,followingOnly:e.target.checked})} className="accent-accent-600" /> フォロー中のみ</label>
       </div>
-      <div className="flex-1 overflow-auto scrollbar-thin">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 dark:bg-gray-800 sticky top-0">
+      <div className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
+        <table className="w-full text-[13px]">
+          <thead className="bg-ink-50 dark:bg-ink-900/40 sticky top-0 text-[11px] uppercase tracking-wider text-ink-500">
             <tr>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('taskNumber')}>#</th>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('projectId')}>プロジェクト</th>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('title')}>タイトル</th>
-              <th className="text-left p-2">担当者</th>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('status')}>ステータス</th>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('startDate')}>開始日</th>
-              <th className="text-left p-2 cursor-pointer" onClick={()=>setS('dueDate')}>締切日</th>
-              <th className="text-left p-2">ラベル</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 num font-semibold w-16" onClick={()=>setS('taskNumber')}>#</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('projectId')}>プロジェクト</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('title')}>タイトル</th>
+              <th className="text-left px-3 py-2 font-semibold">担当</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('status')}>状態</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold num" onClick={()=>setS('startDate')}>開始</th>
+              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold num" onClick={()=>setS('dueDate')}>締切</th>
+              <th className="text-left px-3 py-2 font-semibold">ラベル</th>
             </tr>
           </thead>
           <tbody>
@@ -1700,18 +1910,18 @@ function AllTasksView() {
               const proj = state.projects.find(p=>p.id===t.projectId);
               const org = state.organizations.find(o=>o.id===proj?.orgId);
               const overdue = t.dueDate && isPastDate(t.dueDate) && t.status!=='completed';
-              const dueToday = isTodayDate(t.dueDate);
-              const dueTomorrow = isTomorrow(t.dueDate);
-              const dateColor = overdue?'text-red-600 font-bold':dueToday?'text-red-500':dueTomorrow?'text-orange-500':'';
-              return <tr key={t.id} onClick={()=>openTask(t.id)} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
-                <td className="p-2 text-gray-400">{t.taskNumber}</td>
-                <td className="p-2"><span>{proj?.icon}</span> {proj?.name}</td>
-                <td className="p-2">{t.followers.includes(state.currentUserId)&&'⭐ '}{t.title}</td>
-                <td className="p-2"><div className="flex -space-x-1">{t.assignees.map(u=><Avatar key={u} user={userById(org,u)} size={20} />)}</div></td>
-                <td className="p-2"><StatusPill status={t.status} /></td>
-                <td className="p-2 text-xs">{fmtDate(t.startDate)}</td>
-                <td className={`p-2 text-xs ${dateColor}`}>{fmtDate(t.dueDate)}</td>
-                <td className="p-2"><div className="flex flex-wrap gap-0.5">{t.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} />)}</div></td>
+              const dueToday = isTodayDate(t.dueDate) && t.status!=='completed';
+              const dueTomorrow = isTomorrow(t.dueDate) && t.status!=='completed';
+              const dateColor = overdue?'text-rose-600 font-semibold':dueToday?'text-rose-500':dueTomorrow?'text-amber-600':'';
+              return <tr key={t.id} onClick={()=>openTask(t.id)} className="border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50 dark:hover:bg-ink-700/30 cursor-pointer">
+                <td className="px-3 py-2 text-ink-400 num">{String(t.taskNumber).padStart(3,'0')}</td>
+                <td className="px-3 py-2"><span className={`inline-block w-1.5 h-1.5 rounded-full bg-${proj?.color}-500 mr-1.5`}></span>{proj?.name}</td>
+                <td className="px-3 py-2">{t.followers.includes(state.currentUserId)&&<span className="text-amber-500 mr-1">★</span>}{t.title}</td>
+                <td className="px-3 py-2"><div className="flex -space-x-1.5">{t.assignees.map(u=><Avatar key={u} user={userById(org,u)} size={20} ring />)}</div></td>
+                <td className="px-3 py-2"><StatusPill status={t.status} /></td>
+                <td className="px-3 py-2 text-[11px] num text-ink-500">{fmtDate(t.startDate)}</td>
+                <td className={`px-3 py-2 text-[11px] num ${dateColor}`}>{fmtDate(t.dueDate)}</td>
+                <td className="px-3 py-2"><div className="flex flex-wrap gap-1">{t.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} />)}</div></td>
               </tr>;
             })}
           </tbody>
@@ -1737,12 +1947,12 @@ function SearchView() {
     ));
   }, [q, state.tasks]);
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">🔍 検索</h1>
-      <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="タスク・コメントを検索..."
-        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-lg focus:ring-2 focus:ring-blue-500" />
-      <p className="text-sm text-gray-500 mt-2">{q ? `${matches.length}件ヒット` : 'キーワードを入力してください'}</p>
-      <div className="mt-4 space-y-1">
+    <div className="p-8 max-w-4xl mx-auto">
+      <h1 className="text-[20px] font-semibold tracking-tight mb-5">検索</h1>
+      <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="キーワードを入力（タスク名・説明・コメント）"
+        className="w-full px-4 py-2.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[15px] focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400" />
+      <p className="text-[12px] text-ink-400 mt-2 num">{q ? `${matches.length} 件ヒットしました` : '上の入力欄にキーワードを入力してください'}</p>
+      <div className="mt-4 bg-white dark:bg-ink-800 rounded-md hairline divide-y divide-ink-100 dark:divide-ink-700/50">
         {matches.map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />)}
       </div>
     </div>
@@ -1757,30 +1967,41 @@ function ArchiveView() {
   const archivedProjects = state.projects.filter(p => p.archived);
   const archivedTasks = state.tasks.filter(t => t.archived);
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">📦 アーカイブ</h1>
-      <Card title={`プロジェクト（${archivedProjects.length}）`}>
-        {archivedProjects.length === 0 && <p className="text-sm text-gray-500">アーカイブされたプロジェクトはありません</p>}
-        {archivedProjects.map(p => <div key={p.id} className="flex items-center justify-between p-2 border-b dark:border-gray-700">
-          <span>{p.icon} {p.name}</span>
-          <div className="flex gap-1">
-            <Btn size="xs" onClick={()=>dispatch({type:'RESTORE_PROJECT',id:p.id})}>復元</Btn>
-            <Btn size="xs" variant="danger" onClick={()=>{if(confirm('完全削除しますか？')){dispatch({type:'DELETE_PROJECT',id:p.id});}}}>完全削除</Btn>
-          </div>
-        </div>)}
-      </Card>
-      <Card title={`タスク（${archivedTasks.length}）`}>
-        {archivedTasks.length === 0 && <p className="text-sm text-gray-500">アーカイブされたタスクはありません</p>}
-        {archivedTasks.map(t => {
-          const proj = state.projects.find(p=>p.id===t.projectId);
-          return <div key={t.id} className="flex items-center justify-between p-2 border-b dark:border-gray-700 text-sm">
-            <span>{proj?.icon} <b className="text-gray-500">#{t.taskNumber}</b> {t.title}</span>
-            <div className="flex gap-1">
-              <Btn size="xs" onClick={()=>dispatch({type:'RESTORE_TASK',id:t.id})}>復元</Btn>
-              <Btn size="xs" variant="danger" onClick={()=>{if(confirm('完全削除？'))dispatch({type:'DELETE_TASK',id:t.id});}}>削除</Btn>
+    <div className="p-8 max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-[20px] font-semibold tracking-tight">アーカイブ</h1>
+        <p className="text-[12px] text-ink-400 mt-0.5">非表示にしたプロジェクトとタスクの一覧。復元または完全削除ができます。</p>
+      </div>
+      <Card title="プロジェクト" subtitle={`${archivedProjects.length} 件`}>
+        {archivedProjects.length === 0 && <Empty>アーカイブされたプロジェクトはありません。</Empty>}
+        <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
+          {archivedProjects.map(p => <div key={p.id} className="flex items-center justify-between py-2.5 text-[13px]">
+            <span className="flex items-center gap-2"><span className={`w-1.5 h-1.5 rounded-full bg-${p.color}-500`}></span>{p.name}</span>
+            <div className="flex gap-1.5">
+              <Btn size="xs" variant="outline" onClick={()=>dispatch({type:'RESTORE_PROJECT',id:p.id})}>復元</Btn>
+              <Btn size="xs" variant="danger" onClick={()=>{if(confirm('プロジェクトを完全に削除します。元に戻せません。よろしいですか？')){dispatch({type:'DELETE_PROJECT',id:p.id});}}}>完全削除</Btn>
             </div>
-          </div>;
-        })}
+          </div>)}
+        </div>
+      </Card>
+      <Card title="タスク" subtitle={`${archivedTasks.length} 件`}>
+        {archivedTasks.length === 0 && <Empty>アーカイブされたタスクはありません。</Empty>}
+        <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
+          {archivedTasks.map(t => {
+            const proj = state.projects.find(p=>p.id===t.projectId);
+            return <div key={t.id} className="flex items-center justify-between py-2.5 text-[13px]">
+              <span className="flex items-center gap-2 truncate">
+                <span className={`w-1.5 h-1.5 rounded-full bg-${proj?.color}-500`}></span>
+                <span className="text-ink-400 num text-[11px]">#{String(t.taskNumber).padStart(3,'0')}</span>
+                <span className="truncate">{t.title}</span>
+              </span>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <Btn size="xs" variant="outline" onClick={()=>dispatch({type:'RESTORE_TASK',id:t.id})}>復元</Btn>
+                <Btn size="xs" variant="danger" onClick={()=>{if(confirm('タスクを完全に削除しますか？'))dispatch({type:'DELETE_TASK',id:t.id});}}>削除</Btn>
+              </div>
+            </div>;
+          })}
+        </div>
       </Card>
     </div>
   );
@@ -1795,50 +2016,62 @@ function SettingsView() {
   const [tab, setTab] = useState('members');
 
   const tabs = [
-    { id:'members', label:'👥 メンバー' },
-    { id:'holidays', label:'📅 休日設定' },
-    { id:'profile', label:'🏢 組織プロフィール' },
-    { id:'plan', label:'💳 プラン' },
+    { id:'members',  label:'メンバー' },
+    { id:'holidays', label:'休日' },
+    { id:'profile',  label:'組織情報' },
+    { id:'plan',     label:'プラン' },
   ];
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-6 py-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800">
-        <h1 className="text-2xl font-bold">⚙️ 組織設定</h1>
+      <div className="px-8 py-5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800">
+        <h1 className="text-[20px] font-semibold tracking-tight">組織設定</h1>
+        <p className="text-[12px] text-ink-400 mt-0.5">{org.name} の設定</p>
       </div>
-      <div className="px-6 pt-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex gap-1">
+      <div className="px-8 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex gap-5">
         {tabs.map(t => (
           <button key={t.id} onClick={()=>setTab(t.id)}
-            className={`px-3 py-2 text-sm rounded-t ${tab===t.id?'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold':'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+            className={`py-3 text-[13px] border-b-2 -mb-px ${tab===t.id?'border-accent-600 text-accent-700 dark:text-accent-300 font-semibold':'border-transparent text-ink-500 hover:text-ink-800 dark:hover:text-ink-200'}`}>
             {t.label}
           </button>
         ))}
       </div>
-      <div className="p-6 max-w-4xl">
+      <div className="p-8 max-w-4xl">
         {tab==='members' && <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <h2 className="font-bold">メンバー一覧（{org.members.length}名）</h2>
-            {currentUser?.role==='admin' && <Btn size="sm" onClick={()=>openModal('newMember')}>+ メンバー追加</Btn>}
+            <div>
+              <h2 className="font-semibold">メンバー</h2>
+              <p className="text-[11px] text-ink-400 mt-0.5">{org.members.length}名 在籍</p>
+            </div>
+            {currentUser?.role==='admin' && <Btn size="sm" onClick={()=>openModal('newMember')}>＋ メンバーを追加</Btn>}
           </div>
-          <table className="w-full text-sm bg-white dark:bg-gray-800 rounded shadow">
-            <thead className="bg-gray-100 dark:bg-gray-700"><tr>
-              <th className="text-left p-2">アバター</th><th className="text-left p-2">名前</th><th className="text-left p-2">メール</th><th className="text-left p-2">権限</th><th></th>
-            </tr></thead>
-            <tbody>
-              {org.members.map(m => <tr key={m.id} className="border-t dark:border-gray-700">
-                <td className="p-2"><Avatar user={m} size={32} /></td>
-                <td className="p-2 font-medium">{m.name}</td>
-                <td className="p-2 text-gray-500">{m.email}</td>
-                <td className="p-2">
-                  {currentUser?.role==='admin' && m.id !== state.currentUserId ? (
-                    <Select value={m.role} onChange={v=>dispatch({type:'UPDATE_ORG_MEMBER',id:m.id,patch:{role:v}})} options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
-                  ) : ORG_ROLES.find(r=>r.id===m.role)?.label}
-                </td>
-                <td className="p-2 text-right">{currentUser?.role==='admin' && m.id !== state.currentUserId &&
-                  <button onClick={()=>{if(confirm('外しますか？')){dispatch({type:'REMOVE_ORG_MEMBER',id:m.id});}}} className="text-red-500 hover:text-red-700 text-xs">外す</button>}</td>
-              </tr>)}
-            </tbody>
-          </table>
+          <div className="bg-white dark:bg-ink-800 rounded-md hairline overflow-hidden">
+            <table className="w-full text-[13px]">
+              <thead className="bg-ink-50 dark:bg-ink-900/40 text-[11px] uppercase tracking-wider text-ink-500">
+                <tr>
+                  <th className="text-left px-4 py-2 font-semibold w-12"></th>
+                  <th className="text-left px-4 py-2 font-semibold">名前</th>
+                  <th className="text-left px-4 py-2 font-semibold">メール</th>
+                  <th className="text-left px-4 py-2 font-semibold">権限</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {org.members.map(m => <tr key={m.id} className="border-t border-ink-100 dark:border-ink-700/40">
+                  <td className="px-4 py-2.5"><Avatar user={m} size={28} /></td>
+                  <td className="px-4 py-2.5 font-medium">{m.name}</td>
+                  <td className="px-4 py-2.5 text-ink-500 num">{m.email}</td>
+                  <td className="px-4 py-2.5">
+                    {currentUser?.role==='admin' && m.id !== state.currentUserId ? (
+                      <Select value={m.role} onChange={v=>dispatch({type:'UPDATE_ORG_MEMBER',id:m.id,patch:{role:v}})} options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
+                    ) : <span className="text-ink-600 dark:text-ink-300">{ORG_ROLES.find(r=>r.id===m.role)?.label}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-right">{currentUser?.role==='admin' && m.id !== state.currentUserId &&
+                    <button onClick={()=>{if(confirm('組織から外しますか？')){dispatch({type:'REMOVE_ORG_MEMBER',id:m.id});}}} className="text-ink-400 hover:text-rose-600 text-[11px]">外す</button>}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
         </div>}
         {tab==='holidays' && <HolidaySettings org={org} />}
         {tab==='profile' && <OrgProfile org={org} />}
@@ -1856,31 +2089,35 @@ function HolidaySettings({ org }) {
     const wo = org.holidays.weeklyOff.includes(d) ? org.holidays.weeklyOff.filter(x=>x!==d) : [...org.holidays.weeklyOff, d];
     dispatch({type:'SET_HOLIDAYS',patch:{weeklyOff:wo}});
   };
-  return <div className="space-y-4">
-    <h2 className="font-bold">休日設定（ガントチャートに反映されます）</h2>
+  return <div className="space-y-6">
     <div>
-      <h3 className="text-sm font-bold mb-2">定休日</h3>
-      <div className="flex gap-1">{days.map((n,i)=>(
+      <h2 className="font-semibold">休日設定</h2>
+      <p className="text-[12px] text-ink-400 mt-0.5">ガントチャートの背景に反映されます。</p>
+    </div>
+    <div>
+      <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-2">定休日</h3>
+      <div className="flex gap-1.5">{days.map((n,i)=>(
         <button key={i} onClick={()=>toggleDay(i)}
-          className={`w-12 h-12 rounded ${org.holidays.weeklyOff.includes(i)?'bg-red-500 text-white':'bg-gray-200 dark:bg-gray-700'}`}>{n}</button>
+          className={`w-11 h-11 rounded-md text-[13px] font-medium transition ${org.holidays.weeklyOff.includes(i)?'bg-rose-500 text-white shadow-sm':'bg-ink-100 dark:bg-ink-700/50 text-ink-600 dark:text-ink-300 hover:bg-ink-200'}`}>{n}</button>
       ))}</div>
     </div>
     <div>
-      <label className="flex items-center gap-2">
-        <input type="checkbox" checked={org.holidays.jpHolidays} onChange={e=>dispatch({type:'SET_HOLIDAYS',patch:{jpHolidays:e.target.checked}})} />
-        日本の祝日を反映する（2025-2027）
+      <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-2">国民の祝日</h3>
+      <label className="flex items-center gap-2 text-[13px]">
+        <input type="checkbox" checked={org.holidays.jpHolidays} onChange={e=>dispatch({type:'SET_HOLIDAYS',patch:{jpHolidays:e.target.checked}})} className="accent-accent-600" />
+        日本の祝日（2025〜2027年）を休日として扱う
       </label>
     </div>
     <div>
-      <h3 className="text-sm font-bold mb-2">カスタム休日</h3>
-      <div className="flex flex-wrap gap-1 mb-2">
-        {org.holidays.customHolidays.map(d => <span key={d} className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded text-xs">
-          {fmtDate(d)} <button onClick={()=>dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:org.holidays.customHolidays.filter(x=>x!==d)}})} className="ml-1 text-red-500">×</button>
+      <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-2">個別の休業日</h3>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {org.holidays.customHolidays.map(d => <span key={d} className="bg-ink-100 dark:bg-ink-700/50 px-2.5 py-1 rounded text-[12px] num">
+          {fmtDate(d)}<button onClick={()=>dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:org.holidays.customHolidays.filter(x=>x!==d)}})} className="ml-1.5 text-ink-400 hover:text-rose-500">×</button>
         </span>)}
       </div>
-      <div className="flex gap-1">
-        <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="px-2 py-1 rounded border dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
-        <Btn size="sm" onClick={()=>{ if(newDate && !org.holidays.customHolidays.includes(newDate)){ dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:[...org.holidays.customHolidays,newDate]}}); setNewDate(''); setMsg('休日を追加しました'); } }}>追加</Btn>
+      <div className="flex gap-1.5">
+        <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)} className="px-2 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[13px] num" />
+        <Btn size="sm" onClick={()=>{ if(newDate && !org.holidays.customHolidays.includes(newDate)){ dispatch({type:'SET_HOLIDAYS',patch:{customHolidays:[...org.holidays.customHolidays,newDate]}}); setNewDate(''); setMsg('休業日を追加しました'); } }}>追加</Btn>
       </div>
     </div>
   </div>;
@@ -1888,44 +2125,36 @@ function HolidaySettings({ org }) {
 
 function OrgProfile({ org }) {
   const { dispatch } = useApp();
-  return <div className="space-y-3">
+  return <div className="space-y-4 max-w-md">
     <div>
-      <label className="text-sm font-bold">組織名</label>
-      <Input value={org.name} onChange={v=>dispatch({type:'UPDATE_ORG',patch:{name:v}})} className="max-w-md" />
+      <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">組織名</label>
+      <Input value={org.name} onChange={v=>dispatch({type:'UPDATE_ORG',patch:{name:v}})} className="mt-1.5" />
     </div>
-    <div>
-      <label className="text-sm font-bold">アイコン</label>
-      <EmojiPicker value={org.icon} onChange={v=>dispatch({type:'UPDATE_ORG',patch:{icon:v}})} options={['🏢','🏭','🏪','🏫','🏛','🏥','🏦','🚀','✨','🎯']} />
-    </div>
+    <p className="text-[11px] text-ink-400">※ ロゴアイコンは組織名の最初の1文字を自動で使用します。</p>
   </div>;
 }
 
 function PlanInfo() {
-  return <div className="space-y-4">
-    <h2 className="font-bold">プラン情報</h2>
-    <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-lg">
-      <div className="text-sm opacity-80">現在のプラン</div>
-      <div className="text-3xl font-bold mt-1">デモ プラン</div>
-      <div className="mt-3 text-sm">全機能をお試しいただけます。LocalStorage に保存されます。</div>
+  return <div className="space-y-4 max-w-3xl">
+    <h2 className="font-semibold">ご利用プラン</h2>
+    <div className="bg-ink-900 dark:bg-ink-700 text-white p-6 rounded-lg">
+      <div className="text-[11px] uppercase tracking-wider opacity-70">現在のプラン</div>
+      <div className="text-[22px] font-semibold tracking-tight mt-1">デモ環境</div>
+      <div className="mt-2 text-[13px] opacity-80">全機能をブラウザだけで試せます。データはお使いの端末にのみ保存され、サーバーには送信されません。</div>
     </div>
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-        <h3 className="font-bold">フリー</h3>
-        <p className="text-xs text-gray-500 mt-1">1ユーザー、ガントチャート可</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-        <h3 className="font-bold">スタンダード</h3>
-        <p className="text-xs text-gray-500 mt-1">CSV/API、5GB/license</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-        <h3 className="font-bold">ビジネス</h3>
-        <p className="text-xs text-gray-500 mt-1">SSO/SLA、10GB/license</p>
-      </div>
-      <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-        <h3 className="font-bold">タスクDX</h3>
-        <p className="text-xs text-gray-500 mt-1">人数無制限、専任サポート</p>
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[13px]">
+      <PlanCard name="個人" desc="1ユーザー / ガントチャート / カンバン" />
+      <PlanCard name="チーム" desc="メンバー無制限 / CSV / API / Webhook" />
+      <PlanCard name="ビジネス" desc="SSO / IP制限 / SLA / 監査ログ" />
+      <PlanCard name="エンタープライズ" desc="専任サポート / 定額 / 導入支援" />
     </div>
+  </div>;
+}
+
+function PlanCard({ name, desc }) {
+  return <div className="bg-white dark:bg-ink-800 hairline p-4 rounded-md">
+    <h3 className="font-semibold">{name}</h3>
+    <p className="text-[12px] text-ink-500 mt-1">{desc}</p>
   </div>;
 }
 
@@ -1941,24 +2170,27 @@ function ProjectSettingsView() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-6 py-4 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
-        <h1 className="text-xl font-bold">{proj.icon} {proj.name} の設定</h1>
-        <Btn size="sm" variant="outline" onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>← ボードに戻る</Btn>
+      <div className="px-8 py-5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex items-center gap-3">
+        <span className={`w-2.5 h-2.5 rounded-full bg-${proj.color}-500`}></span>
+        <h1 className="text-[18px] font-semibold tracking-tight">{proj.name}</h1>
+        <span className="text-ink-300">/</span>
+        <span className="text-[12px] text-ink-500">プロジェクト設定</span>
+        <Btn size="sm" variant="ghost" className="ml-auto" onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>← ボードへ</Btn>
       </div>
-      <div className="px-6 pt-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex gap-1">
+      <div className="px-8 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex gap-5">
         {[
-          {id:'members',label:'👥 メンバー'},
-          {id:'labels',label:'🏷 ラベル'},
-          {id:'lists',label:'📋 リスト'},
-          {id:'general',label:'⚙️ 一般'},
+          {id:'members',label:'メンバー'},
+          {id:'labels',label:'ラベル'},
+          {id:'lists',label:'リスト'},
+          {id:'general',label:'一般'},
         ].map(t => (
           <button key={t.id} onClick={()=>setTab(t.id)}
-            className={`px-3 py-2 text-sm rounded-t ${tab===t.id?'bg-blue-100 dark:bg-blue-900/30 text-blue-700':'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+            className={`py-3 text-[13px] border-b-2 -mb-px ${tab===t.id?'border-accent-600 text-accent-700 dark:text-accent-300 font-semibold':'border-transparent text-ink-500 hover:text-ink-800 dark:hover:text-ink-200'}`}>
             {t.label}
           </button>
         ))}
       </div>
-      <div className="p-6 max-w-4xl space-y-3">
+      <div className="p-8 max-w-4xl">
         {tab==='members' && <ProjMembers proj={proj} org={org} />}
         {tab==='labels' && <ProjLabels proj={proj} />}
         {tab==='lists' && <ProjLists proj={proj} />}
@@ -1972,48 +2204,63 @@ function ProjMembers({ proj, org }) {
   const { dispatch } = useApp();
   const [showAdd, setShowAdd] = useState(false);
   const candidates = org.members.filter(m => !proj.members.find(pm => pm.userId===m.id));
-  return <div className="space-y-3">
-    <div className="flex justify-between"><h2 className="font-bold">プロジェクトメンバー（{proj.members.length}）</h2>
-      {candidates.length>0 && <Btn size="sm" onClick={()=>setShowAdd(!showAdd)}>+ 追加</Btn>}
+  return <div className="space-y-4">
+    <div className="flex justify-between items-center">
+      <div>
+        <h2 className="font-semibold">プロジェクトメンバー</h2>
+        <p className="text-[11px] text-ink-400 mt-0.5">{proj.members.length}名 が参加中</p>
+      </div>
+      {candidates.length>0 && <Btn size="sm" onClick={()=>setShowAdd(!showAdd)}>＋ 追加</Btn>}
     </div>
-    {showAdd && <div className="p-2 border dark:border-gray-700 rounded">
+    {showAdd && <div className="p-2 hairline rounded-md bg-white dark:bg-ink-800">
+      <div className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold px-2 py-1">追加できるメンバー</div>
       {candidates.map(m => <button key={m.id} onClick={()=>{dispatch({type:'ADD_PROJECT_MEMBER',projectId:proj.id,userId:m.id,role:'member'}); setShowAdd(false);}}
-        className="block w-full text-left px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+        className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-ink-50 dark:hover:bg-ink-700/40 rounded text-[13px]">
         <Avatar user={m} size={20} /> {m.name}
       </button>)}
     </div>}
-    <table className="w-full text-sm bg-white dark:bg-gray-800 rounded shadow">
-      <thead className="bg-gray-100 dark:bg-gray-700"><tr><th className="text-left p-2">名前</th><th className="text-left p-2">権限</th><th></th></tr></thead>
-      <tbody>{proj.members.map(m => {
-        const u = userById(org, m.userId);
-        return <tr key={m.userId} className="border-t dark:border-gray-700">
-          <td className="p-2"><Avatar user={u} size={24} /> {u?.name}</td>
-          <td className="p-2"><Select value={m.role} onChange={v=>dispatch({type:'UPDATE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId,role:v})} options={PROJECT_ROLES.map(r=>({value:r.id,label:r.label}))} /></td>
-          <td className="p-2 text-right"><button onClick={()=>{if(confirm('外しますか？')){dispatch({type:'REMOVE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId});}}} className="text-red-500 text-xs">外す</button></td>
-        </tr>;
-      })}</tbody>
-    </table>
+    <div className="bg-white dark:bg-ink-800 rounded-md hairline overflow-hidden">
+      <table className="w-full text-[13px]">
+        <thead className="bg-ink-50 dark:bg-ink-900/40 text-[11px] uppercase tracking-wider text-ink-500"><tr>
+          <th className="text-left px-4 py-2 font-semibold">名前</th>
+          <th className="text-left px-4 py-2 font-semibold">プロジェクト権限</th>
+          <th></th>
+        </tr></thead>
+        <tbody>{proj.members.map(m => {
+          const u = userById(org, m.userId);
+          return <tr key={m.userId} className="border-t border-ink-100 dark:border-ink-700/40">
+            <td className="px-4 py-2.5 flex items-center gap-2"><Avatar user={u} size={24} /> {u?.name}</td>
+            <td className="px-4 py-2.5"><Select value={m.role} onChange={v=>dispatch({type:'UPDATE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId,role:v})} options={PROJECT_ROLES.map(r=>({value:r.id,label:r.label}))} /></td>
+            <td className="px-4 py-2.5 text-right"><button onClick={()=>{if(confirm('プロジェクトから外しますか？')){dispatch({type:'REMOVE_PROJECT_MEMBER',projectId:proj.id,userId:m.userId});}}} className="text-ink-400 hover:text-rose-600 text-[11px]">外す</button></td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
   </div>;
 }
 
 function ProjLabels({ proj }) {
   const { dispatch } = useApp();
   const [name, setName] = useState('');
-  const [color, setColor] = useState('blue');
-  return <div className="space-y-3">
-    <h2 className="font-bold">ラベル（{proj.labels.length}/50）</h2>
+  const [color, setColor] = useState('indigo');
+  return <div className="space-y-4">
+    <div>
+      <h2 className="font-semibold">ラベル</h2>
+      <p className="text-[11px] text-ink-400 mt-0.5">{proj.labels.length}/50 件</p>
+    </div>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {proj.labels.map(l => (
-        <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded shadow">
+        <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-ink-800 rounded-md hairline">
+          <span className={`w-2.5 h-2.5 rounded-full ${colorObj(l.color).bg}`}></span>
           <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{name:v}})} />
           <ColorPicker value={l.color} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{color:v}})} options={LABEL_COLORS.map(c=>c.id)} />
-          <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_LABEL',projectId:proj.id,labelId:l.id});}} className="text-red-500 px-2">🗑</button>
+          <button onClick={()=>{if(confirm('ラベルを削除しますか？タスクからも外れます。'))dispatch({type:'DELETE_LABEL',projectId:proj.id,labelId:l.id});}} className="text-ink-400 hover:text-rose-500 px-1 text-[11px]">削除</button>
         </div>
       ))}
     </div>
-    {proj.labels.length < 50 && <div className="p-3 border dark:border-gray-700 rounded space-y-2">
-      <h3 className="text-sm font-bold">新しいラベル</h3>
-      <Input value={name} onChange={setName} placeholder="ラベル名" />
+    {proj.labels.length < 50 && <div className="p-4 hairline rounded-md bg-white dark:bg-ink-800 space-y-2 max-w-md">
+      <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">新しいラベルを追加</h3>
+      <Input value={name} onChange={setName} placeholder="ラベル名（例：至急、デザイン）" />
       <ColorPicker value={color} onChange={setColor} options={LABEL_COLORS.map(c=>c.id)} />
       <Btn size="sm" onClick={()=>{if(name.trim()){dispatch({type:'ADD_LABEL',projectId:proj.id,name:name.trim(),color}); setName('');}}}>追加</Btn>
     </div>}
@@ -2022,35 +2269,40 @@ function ProjLabels({ proj }) {
 
 function ProjLists({ proj }) {
   const { dispatch } = useApp();
-  return <div className="space-y-2">
-    <h2 className="font-bold">リスト一覧</h2>
-    {[...proj.lists].sort((a,b)=>a.order-b.order).map(l => (
-      <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded shadow">
-        <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{name:v}})} />
-        <Select value={l.autoStatus||''} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{autoStatus:v||null}})} options={[
-          {value:'',label:'ステータス自動: なし'},
-          ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
-        ]} />
-        <button onClick={()=>{if(confirm('削除？タスクはアーカイブされます'))dispatch({type:'DELETE_LIST',projectId:proj.id,listId:l.id});}} className="text-red-500 px-2">🗑</button>
-      </div>
-    ))}
+  return <div className="space-y-3">
+    <div>
+      <h2 className="font-semibold">リスト</h2>
+      <p className="text-[11px] text-ink-400 mt-0.5">「移動時のステータス」を設定すると、リスト間でカードを移動した時に自動でステータスが切り替わります。</p>
+    </div>
+    <div className="space-y-1.5">
+      {[...proj.lists].sort((a,b)=>a.order-b.order).map(l => (
+        <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-ink-800 rounded-md hairline">
+          <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{name:v}})} />
+          <Select value={l.autoStatus||''} onChange={v=>dispatch({type:'UPDATE_LIST',projectId:proj.id,listId:l.id,patch:{autoStatus:v||null}})} options={[
+            {value:'',label:'ステータスを変更しない'},
+            ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
+          ]} />
+          <button onClick={()=>{if(confirm('リストを削除しますか？中のタスクはアーカイブされます。'))dispatch({type:'DELETE_LIST',projectId:proj.id,listId:l.id});}} className="text-ink-400 hover:text-rose-500 px-1 text-[11px]">削除</button>
+        </div>
+      ))}
+    </div>
   </div>;
 }
 
 function ProjGeneral({ proj }) {
   const { dispatch, setMsg } = useApp();
-  return <div className="space-y-3">
+  return <div className="space-y-5 max-w-md">
     <div>
-      <label className="text-sm font-bold">プロジェクト名</label>
-      <Input value={proj.name} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{name:v}})} />
+      <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">プロジェクト名</label>
+      <Input value={proj.name} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{name:v}})} className="mt-1.5" />
     </div>
     <div>
-      <label className="text-sm font-bold">アイコン</label>
-      <EmojiPicker value={proj.icon} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{icon:v}})} options={PROJECT_ICONS} />
+      <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カラー</label>
+      <div className="mt-1.5"><ColorPicker value={proj.color} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{color:v}})} options={PROJECT_COLORS} /></div>
     </div>
-    <div className="border-t dark:border-gray-700 pt-3 space-y-1">
-      <Btn variant="outline" onClick={()=>{dispatch({type:'DUPLICATE_PROJECT',id:proj.id}); setMsg('プロジェクトを複製しました');}}>📋 プロジェクトを複製</Btn>
-      <Btn variant="outline" onClick={()=>{if(confirm('アーカイブしますか？')){dispatch({type:'ARCHIVE_PROJECT',id:proj.id});dispatch({type:'SET_VIEW',view:'dashboard'});}}}>📦 アーカイブ</Btn>
+    <div className="border-t border-ink-100 dark:border-ink-700/60 pt-4 space-y-2">
+      <Btn variant="outline" className="w-full justify-center" onClick={()=>{dispatch({type:'DUPLICATE_PROJECT',id:proj.id}); setMsg('プロジェクトを複製しました');}}>このプロジェクトを複製</Btn>
+      <Btn variant="outline" className="w-full justify-center" onClick={()=>{if(confirm('プロジェクトをアーカイブしますか？')){dispatch({type:'ARCHIVE_PROJECT',id:proj.id});dispatch({type:'SET_VIEW',view:'dashboard'});}}}>アーカイブ</Btn>
     </div>
   </div>;
 }
@@ -2062,73 +2314,77 @@ function AutomationView() {
   const { state, dispatch, setMsg } = useApp();
   const [whName, setWhName] = useState(''); const [whUrl, setWhUrl] = useState('');
   const [keyName, setKeyName] = useState('');
-  return <div className="p-6 max-w-4xl mx-auto space-y-6">
-    <h1 className="text-2xl font-bold">🔌 API・自動化</h1>
+  return <div className="p-8 max-w-4xl mx-auto space-y-6">
+    <div>
+      <h1 className="text-[20px] font-semibold tracking-tight">連携 / API</h1>
+      <p className="text-[12px] text-ink-400 mt-0.5">Slack や Microsoft Teams への通知、外部システムからの自動操作を設定します。</p>
+    </div>
 
-    <Card title="🔗 Webhook">
-      <p className="text-sm text-gray-500 mb-3">タスク作成・移動・コメント等のイベントを外部URLに送信します（Slack / Teams / 独自エンドポイント）</p>
-      <div className="space-y-2">
+    <Card title="Webhook" subtitle="タスクの変化を外部URLに通知します">
+      <div className="space-y-1.5">
         {state.automation.webhooks.map(w => (
-          <div key={w.id} className="flex items-center gap-2 p-2 border dark:border-gray-700 rounded">
-            <input type="checkbox" checked={w.enabled} onChange={()=>dispatch({type:'TOGGLE_WEBHOOK',id:w.id})} />
-            <div className="flex-1">
-              <div className="font-medium">{w.name}</div>
-              <div className="text-xs text-gray-500 truncate">{w.url}</div>
-              <div className="text-xs text-blue-600">{w.events.join(', ')}</div>
+          <div key={w.id} className="flex items-center gap-3 p-3 hairline rounded-md">
+            <label className="inline-flex items-center cursor-pointer">
+              <input type="checkbox" checked={w.enabled} onChange={()=>dispatch({type:'TOGGLE_WEBHOOK',id:w.id})} className="sr-only peer" />
+              <div className="w-9 h-5 bg-ink-200 dark:bg-ink-700 rounded-full peer-checked:bg-emerald-500 transition relative">
+                <div className={`absolute top-0.5 ${w.enabled?'left-4':'left-0.5'} w-4 h-4 bg-white rounded-full shadow transition-all`}></div>
+              </div>
+            </label>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium">{w.name}</div>
+              <div className="text-[11px] text-ink-500 truncate font-mono">{w.url}</div>
+              <div className="text-[10px] text-accent-600 mt-0.5">{w.events.join(' · ')}</div>
             </div>
-            <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_WEBHOOK',id:w.id});}} className="text-red-500">🗑</button>
+            <button onClick={()=>{if(confirm('Webhookを削除しますか？'))dispatch({type:'DELETE_WEBHOOK',id:w.id});}} className="text-ink-400 hover:text-rose-500 text-[11px]">削除</button>
           </div>
         ))}
       </div>
-      <div className="mt-3 p-3 border dark:border-gray-700 rounded space-y-2">
-        <h4 className="text-sm font-bold">新規 Webhook</h4>
-        <Input value={whName} onChange={setWhName} placeholder="名前 (例: Slack #general)" />
-        <Input value={whUrl} onChange={setWhUrl} placeholder="https://hooks.slack.com/..." />
-        <Btn size="sm" onClick={()=>{ if(whName && whUrl){dispatch({type:'ADD_WEBHOOK',patch:{name:whName,url:whUrl,events:['task_created','task_moved','comment']}}); setWhName('');setWhUrl(''); setMsg('Webhookを追加しました');} }}>追加</Btn>
+      <div className="mt-3 p-3 hairline rounded-md space-y-2">
+        <h4 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">追加</h4>
+        <Input value={whName} onChange={setWhName} placeholder="表示名（例：Slack #pj-abc）" />
+        <Input value={whUrl} onChange={setWhUrl} placeholder="https://hooks.slack.com/services/..." />
+        <Btn size="sm" onClick={()=>{ if(whName && whUrl){dispatch({type:'ADD_WEBHOOK',patch:{name:whName,url:whUrl,events:['task_created','task_moved','comment']}}); setWhName('');setWhUrl(''); setMsg('Webhookを登録しました');} }}>登録する</Btn>
       </div>
     </Card>
 
-    <Card title="🔑 API キー">
-      <p className="text-sm text-gray-500 mb-3">REST API でタスクの取得・作成・更新ができます。<code>X-Jooto-Api-Key</code> ヘッダーで認証。</p>
-      <div className="space-y-1">
+    <Card title="API キー" subtitle="ヘッダー X-Api-Key で認証します">
+      <div className="space-y-1.5">
         {state.apiKeys.map(k => (
-          <div key={k.id} className="flex items-center gap-2 p-2 border dark:border-gray-700 rounded">
-            <span className="flex-1">
-              <div className="font-medium text-sm">{k.name}</div>
-              <code className="text-xs text-gray-500">{k.key}</code>
-            </span>
-            <button onClick={()=>{navigator.clipboard.writeText(k.key); setMsg('コピーしました');}} className="text-blue-600 text-xs">コピー</button>
-            <button onClick={()=>{if(confirm('削除？'))dispatch({type:'DELETE_API_KEY',id:k.id});}} className="text-red-500">🗑</button>
+          <div key={k.id} className="flex items-center gap-3 p-3 hairline rounded-md">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium">{k.name}</div>
+              <code className="text-[11px] text-ink-500 truncate block font-mono">{k.key}</code>
+              <div className="text-[10px] text-ink-400 num mt-0.5">発行 {fmtDateTime(k.createdAt)}</div>
+            </div>
+            <button onClick={()=>{navigator.clipboard.writeText(k.key); setMsg('クリップボードにコピーしました');}} className="text-accent-600 hover:underline text-[11px]">コピー</button>
+            <button onClick={()=>{if(confirm('このキーを失効させますか？'))dispatch({type:'DELETE_API_KEY',id:k.id});}} className="text-ink-400 hover:text-rose-500 text-[11px]">失効</button>
           </div>
         ))}
       </div>
       <div className="flex gap-2 mt-3">
-        <Input value={keyName} onChange={setKeyName} placeholder="キー名 (例: GitHub Actions)" />
-        <Btn size="sm" onClick={()=>{if(keyName){dispatch({type:'ADD_API_KEY',name:keyName}); setKeyName('');setMsg('APIキーを発行しました');}}}>+ 発行</Btn>
+        <Input value={keyName} onChange={setKeyName} placeholder="キー名（例：GitHub Actions、Make.com）" />
+        <Btn size="sm" onClick={()=>{if(keyName){dispatch({type:'ADD_API_KEY',name:keyName}); setKeyName('');setMsg('新しいキーを発行しました');}}}>＋ 発行</Btn>
       </div>
     </Card>
 
-    <Card title="📚 API ドキュメント（抜粋）">
-      <div className="space-y-2 text-sm">
-        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
-          <div className="text-green-600 font-bold">GET /api/v1/tasks</div>
-          <div className="text-gray-500">タスク一覧を取得</div>
-        </div>
-        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
-          <div className="text-blue-600 font-bold">POST /api/v1/tasks</div>
-          <div className="text-gray-500">タスクを新規作成</div>
-        </div>
-        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
-          <div className="text-yellow-600 font-bold">PUT /api/v1/tasks/:id</div>
-          <div className="text-gray-500">タスクを更新</div>
-        </div>
-        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded font-mono text-xs">
-          <div className="text-red-600 font-bold">DELETE /api/v1/tasks/:id</div>
-          <div className="text-gray-500">タスクを削除</div>
-        </div>
-        <p className="text-xs text-gray-500">※ 本デモではエンドポイントは実装されていません（API設計のみ表示）</p>
+    <Card title="エンドポイント一覧" subtitle="REST API（デモ環境では未稼働）">
+      <div className="space-y-1.5 text-[12px] font-mono">
+        <Endpoint method="GET"    color="emerald" path="/v1/tasks"       desc="タスク一覧を取得" />
+        <Endpoint method="POST"   color="accent"  path="/v1/tasks"       desc="新しいタスクを作成" />
+        <Endpoint method="PATCH"  color="amber"   path="/v1/tasks/:id"   desc="タスクを更新" />
+        <Endpoint method="DELETE" color="rose"    path="/v1/tasks/:id"   desc="タスクを削除" />
+        <Endpoint method="GET"    color="emerald" path="/v1/projects"    desc="プロジェクト一覧" />
+        <Endpoint method="POST"   color="accent"  path="/v1/comments"    desc="コメントを投稿" />
       </div>
     </Card>
+  </div>;
+}
+
+function Endpoint({ method, color, path, desc }) {
+  return <div className="flex items-center gap-3 px-3 py-2 hairline rounded">
+    <span className={`text-[10px] font-bold uppercase text-${color}-700 bg-${color}-100 px-1.5 py-0.5 rounded w-14 text-center`}>{method}</span>
+    <span className="font-medium text-ink-800 dark:text-ink-100">{path}</span>
+    <span className="text-ink-500 ml-auto text-[11px]">{desc}</span>
   </div>;
 }
 
@@ -2136,7 +2392,7 @@ function AutomationView() {
  * AI View
  * ========================================= */
 function AIView() {
-  const { state, dispatch, setMsg, openModal } = useApp();
+  const { state, dispatch, setMsg } = useApp();
   const [prompt, setPrompt] = useState('');
   const [target, setTarget] = useState(state.selectedProjectId);
   const [diagnosis, setDiagnosis] = useState(null);
@@ -2145,7 +2401,7 @@ function AIView() {
   const generate = () => {
     if (prompt.trim() && target){
       dispatch({type:'AI_GENERATE_TASKS', projectId: target, prompt: prompt.trim()});
-      setMsg('AIが6件のタスクを自動生成しました'); setPrompt('');
+      setMsg('タスクを生成しました'); setPrompt('');
     }
   };
   const diagnose = () => {
@@ -2157,53 +2413,55 @@ function AIView() {
     const list = proj?.lists.find(l => l.id===t.listId);
     const lines = [];
     if (detail >= 1) lines.push(`「${t.title}」は ${proj?.name} の「${list?.name}」リストにあります。`);
-    if (detail >= 2) lines.push(`現在のステータスは「${statusObj(t.status).label}」、コメント数 ${t.comments.length} 件、チェックリスト ${t.checklist.length} 件中 ${t.checklist.filter(c=>c.done).length} 件完了。`);
-    if (detail >= 3) lines.push(`期間は ${t.startDate||'未設定'} 〜 ${t.dueDate||'未設定'}。${t.dueDate && isPastDate(t.dueDate) && t.status!=='completed' ? '⚠ 期限を過ぎています。' : ''}`);
-    if (detail >= 4) lines.push(`担当者は ${t.assignees.length} 名、フォロワーは ${t.followers.length} 名で、活発さは ${t.comments.length > 3 ? '高' : '中'}と評価できます。`);
-    if (detail >= 5) lines.push(`このタスクの全体的な進捗状況、コメントの内容、メンバー間のやり取りを総合的に分析しました。`);
-    const toneText = ['とても優しく：','優しく：','中立的に：','やや厳しく：','厳しく：'][tone-1] || '';
+    if (detail >= 2) lines.push(`ステータスは「${statusObj(t.status).label}」、コメント ${t.comments.length} 件、チェックリストは ${t.checklist.length} 件中 ${t.checklist.filter(c=>c.done).length} 件完了。`);
+    if (detail >= 3) lines.push(`期間は ${t.startDate||'未設定'} 〜 ${t.dueDate||'未設定'}。${t.dueDate && isPastDate(t.dueDate) && t.status!=='completed' ? '締切を過ぎています。' : ''}`);
+    if (detail >= 4) lines.push(`担当者 ${t.assignees.length} 名 / フォロー ${t.followers.length} 名。コメントの量から見るとやり取りは ${t.comments.length > 3 ? '活発' : 'やや少なめ'}です。`);
+    if (detail >= 5) lines.push(`進捗状況・コメント内容・メンバー間のやり取りを総合して評価しています。`);
+    const toneText = ['丁寧に：','穏やかに：','中立的に：','率直に：','厳しめに：'][tone-1] || '';
     let fb = '';
-    if (t.status==='completed') fb = `${toneText}よく完了されました。次回も同じ調子で進めましょう。`;
-    else if (t.dueDate && isPastDate(t.dueDate)) fb = `${toneText}期限を過ぎています。優先度の見直しか、期限の再設定が必要かもしれません。`;
-    else if (t.comments.length === 0) fb = `${toneText}コメントによるコミュニケーションが少なめです。チームで状況を共有しましょう。`;
-    else fb = `${toneText}順調に進んでいます。このまま継続しましょう。`;
+    if (t.status==='completed') fb = `${toneText}完了されています。振り返りメモを残しておくと、次の案件にも活かせます。`;
+    else if (t.dueDate && isPastDate(t.dueDate)) fb = `${toneText}締切を過ぎています。優先度の見直し、もしくは期限再設定の合意取りを検討してみてください。`;
+    else if (t.comments.length === 0) fb = `${toneText}コメントが少ないため状況が見えづらい状態です。担当者か関係者で一度状況をシェアできるとよさそうです。`;
+    else fb = `${toneText}進行は順調そうです。次のチェックポイントが近づいたら、関係者にひと声かけておきましょう。`;
     setDiagnosis({ summary: lines.join(' '), feedback: fb });
   };
 
-  return <div className="p-6 max-w-4xl mx-auto space-y-6">
-    <h1 className="text-2xl font-bold">🤖 AI機能</h1>
-    <Card title="🪄 AIタスク生成β">
-      <p className="text-sm text-gray-500 mb-3">プロジェクト概要を入力すると、AIが必要なタスクを自動でカンバンに展開します</p>
+  return <div className="p-8 max-w-4xl mx-auto space-y-6">
+    <div>
+      <h1 className="text-[20px] font-semibold tracking-tight">アシスタント</h1>
+      <p className="text-[12px] text-ink-400 mt-0.5">タスクの自動生成や、いまの進捗の振り返りを手助けします。</p>
+    </div>
+
+    <Card title="タスクの下書きを作る" subtitle="プロジェクトの目的を入れると、それらしいタスクを自動で並べます">
       <Select value={target} onChange={setTarget} options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} className="mb-2 w-full" />
-      <Textarea value={prompt} onChange={setPrompt} placeholder="例: ECサイトのリニューアルプロジェクト" rows={3} />
-      <Btn className="mt-2" onClick={generate}>✨ 生成する</Btn>
+      <Textarea value={prompt} onChange={setPrompt} placeholder="例：ABC商事のサービスサイトをリニューアルする" rows={3} />
+      <Btn className="mt-3" onClick={generate}>下書きを作成</Btn>
     </Card>
 
-    <Card title="🩺 AIタスク診断">
-      <p className="text-sm text-gray-500 mb-3">タスクのコメント・進捗・担当者・期限を分析し、要約とフィードバックを生成します</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+    <Card title="タスクの状況を整理する" subtitle="コメントや進捗から、いまの状態と次のひと押しをまとめます">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="text-xs font-bold text-gray-500">要約の粒度（1=簡潔 / 5=詳細）</label>
-          <input type="range" min="1" max="5" value={state.aiSettings.summaryDetail} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{summaryDetail:+e.target.value}})} className="w-full" />
-          <div className="text-center text-xs">{state.aiSettings.summaryDetail}</div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">要約の粒度</label>
+          <input type="range" min="1" max="5" value={state.aiSettings.summaryDetail} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{summaryDetail:+e.target.value}})} className="w-full mt-2 accent-accent-600" />
+          <div className="flex justify-between text-[10px] text-ink-400 mt-1"><span>簡潔</span><span className="num">{state.aiSettings.summaryDetail}</span><span>詳しめ</span></div>
         </div>
         <div>
-          <label className="text-xs font-bold text-gray-500">フィードバック口調（1=優しい / 5=厳しい）</label>
-          <input type="range" min="1" max="5" value={state.aiSettings.feedbackTone} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{feedbackTone:+e.target.value}})} className="w-full" />
-          <div className="text-center text-xs">{state.aiSettings.feedbackTone}</div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">フィードバックの口調</label>
+          <input type="range" min="1" max="5" value={state.aiSettings.feedbackTone} onChange={e=>dispatch({type:'SET_AI_SETTINGS',patch:{feedbackTone:+e.target.value}})} className="w-full mt-2 accent-accent-600" />
+          <div className="flex justify-between text-[10px] text-ink-400 mt-1"><span>柔らかく</span><span className="num">{state.aiSettings.feedbackTone}</span><span>率直に</span></div>
         </div>
       </div>
       <Select value={diagTask} onChange={setDiagTask} className="w-full mb-2"
-        options={[{value:'',label:'タスクを選択...'},...state.tasks.filter(t=>!t.archived).map(t=>({value:t.id,label:`#${t.taskNumber} ${t.title}`}))]} />
-      <Btn onClick={diagnose}>🔍 診断する</Btn>
-      {diagnosis && <div className="mt-4 space-y-3">
-        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded">
-          <h4 className="font-bold text-sm">📊 要約</h4>
-          <p className="text-sm mt-1">{diagnosis.summary}</p>
+        options={[{value:'',label:'タスクを選んでください'},...state.tasks.filter(t=>!t.archived).map(t=>({value:t.id,label:`#${String(t.taskNumber).padStart(3,'0')} ${t.title}`}))]} />
+      <Btn onClick={diagnose}>振り返りを生成</Btn>
+      {diagnosis && <div className="mt-4 space-y-2.5">
+        <div className="p-3.5 bg-ink-50 dark:bg-ink-700/30 rounded-md">
+          <h4 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold mb-1.5">いまの状況</h4>
+          <p className="text-[13px] leading-relaxed">{diagnosis.summary}</p>
         </div>
-        <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded">
-          <h4 className="font-bold text-sm">💡 フィードバック</h4>
-          <p className="text-sm mt-1">{diagnosis.feedback}</p>
+        <div className="p-3.5 bg-accent-50 dark:bg-accent-900/20 rounded-md">
+          <h4 className="text-[11px] uppercase tracking-wider text-accent-700 dark:text-accent-300 font-semibold mb-1.5">提案</h4>
+          <p className="text-[13px] leading-relaxed">{diagnosis.feedback}</p>
         </div>
       </div>}
     </Card>
@@ -2216,20 +2474,27 @@ function AIView() {
 function HistoryView() {
   const { state, openTask } = useApp();
   const org = state.organizations.find(o => o.id===state.currentOrgId);
-  return <div className="p-6 max-w-4xl mx-auto">
-    <h1 className="text-2xl font-bold mb-4">📜 行動履歴</h1>
-    <div className="bg-white dark:bg-gray-800 rounded shadow divide-y dark:divide-gray-700">
-      {state.history.length === 0 && <p className="p-4 text-sm text-gray-500">履歴はまだありません</p>}
+  return <div className="p-8 max-w-4xl mx-auto">
+    <div className="mb-5">
+      <h1 className="text-[20px] font-semibold tracking-tight">行動履歴</h1>
+      <p className="text-[12px] text-ink-400 mt-0.5">タスクの作成・移動、コメント投稿などの操作ログ</p>
+    </div>
+    <div className="bg-white dark:bg-ink-800 rounded-md hairline divide-y divide-ink-100 dark:divide-ink-700/50">
+      {state.history.length === 0 && <Empty>履歴はまだありません。</Empty>}
       {state.history.slice(0,200).map(h => {
         const u = userById(org, h.userId);
         const proj = state.projects.find(p => p.id===h.projectId);
-        return <div key={h.id} className="p-3 flex items-start gap-2">
+        return <div key={h.id} className="p-3.5 flex items-start gap-2.5">
           <Avatar user={u} size={28} />
-          <div className="flex-1">
-            <div className="text-sm">{u?.name} が {proj && <span className="text-blue-600">[{proj.icon} {proj.name}]</span>} {h.text}</div>
-            <div className="text-xs text-gray-500">{fmtDateTime(h.ts)}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] leading-relaxed">
+              <span className="font-medium">{u?.name}</span> が
+              {proj && <span className="text-ink-500"> <span className={`inline-block w-1.5 h-1.5 rounded-full bg-${proj.color}-500 mx-1`}></span>{proj.name} で </span>}
+              {h.text}
+            </div>
+            <div className="text-[11px] text-ink-400 num mt-0.5">{fmtDateTime(h.ts)}</div>
           </div>
-          {h.taskId && <button onClick={()=>openTask(h.taskId)} className="text-xs text-blue-600 hover:underline">表示</button>}
+          {h.taskId && <button onClick={()=>openTask(h.taskId)} className="text-[11px] text-accent-600 hover:underline">開く</button>}
         </div>;
       })}
     </div>
@@ -2242,35 +2507,41 @@ function HistoryView() {
 function NewProjectModal({ onClose }) {
   const { dispatch, setMsg } = useApp();
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('📋');
-  const [color, setColor] = useState('blue');
+  const [color, setColor] = useState('indigo');
   const [template, setTemplate] = useState('default');
   const templates = {
     default: [{ name:'未着手', autoStatus:'not_started' },{ name:'進行中', autoStatus:'in_progress' },{ name:'完了', autoStatus:'completed' }],
-    dev:     [{ name:'バックログ', autoStatus:'not_started' },{ name:'設計', autoStatus:'in_progress' },{ name:'開発中', autoStatus:'in_progress' },{ name:'レビュー', autoStatus:'on_hold' },{ name:'リリース完了', autoStatus:'completed' }],
-    sales:   [{ name:'リード', autoStatus:'not_started' },{ name:'初回商談', autoStatus:'in_progress' },{ name:'提案中', autoStatus:'in_progress' },{ name:'クロージング', autoStatus:'on_hold' },{ name:'受注', autoStatus:'completed' },{ name:'失注', autoStatus:'cancelled' }],
-    marketing:[{ name:'企画', autoStatus:'not_started' },{ name:'制作', autoStatus:'in_progress' },{ name:'入稿待ち', autoStatus:'on_hold' },{ name:'配信中', autoStatus:'in_progress' },{ name:'完了', autoStatus:'completed' }],
-    pr:      [{ name:'取材依頼', autoStatus:'not_started' },{ name:'準備中', autoStatus:'in_progress' },{ name:'取材実施', autoStatus:'in_progress' },{ name:'記事化', autoStatus:'on_hold' },{ name:'配信完了', autoStatus:'completed' }],
+    web:     [{ name:'バックログ', autoStatus:'not_started' },{ name:'今週やる', autoStatus:'in_progress' },{ name:'レビュー待ち', autoStatus:'on_hold' },{ name:'完了', autoStatus:'completed' }],
+    dev:     [{ name:'Backlog', autoStatus:'not_started' },{ name:'In Progress', autoStatus:'in_progress' },{ name:'QA', autoStatus:'on_hold' },{ name:'Done', autoStatus:'completed' }],
+    sales:   [{ name:'リード', autoStatus:'not_started' },{ name:'初回商談', autoStatus:'in_progress' },{ name:'提案', autoStatus:'in_progress' },{ name:'クロージング', autoStatus:'on_hold' },{ name:'受注', autoStatus:'completed' },{ name:'失注', autoStatus:'cancelled' }],
+    marketing:[{ name:'企画', autoStatus:'not_started' },{ name:'制作', autoStatus:'in_progress' },{ name:'入稿', autoStatus:'on_hold' },{ name:'配信中', autoStatus:'in_progress' },{ name:'完了', autoStatus:'completed' }],
+    hr:      [{ name:'応募受付', autoStatus:'not_started' },{ name:'一次面談', autoStatus:'in_progress' },{ name:'二次面談', autoStatus:'in_progress' },{ name:'オファー', autoStatus:'on_hold' },{ name:'内定', autoStatus:'completed' }],
   };
   const submit = () => {
     if (!name.trim()) return;
-    dispatch({ type:'ADD_PROJECT', name: name.trim(), icon, color, lists: templates[template] });
+    dispatch({ type:'ADD_PROJECT', name: name.trim(), icon: '◆', color, lists: templates[template] });
     setMsg('プロジェクトを作成しました');
     onClose();
   };
-  return <Modal open onClose={onClose} title="新しいプロジェクト" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>作成</Btn></>}>
-    <div className="space-y-3">
-      <div><label className="text-sm font-bold">プロジェクト名</label><Input value={name} onChange={setName} placeholder="例: 新サイト立ち上げ" /></div>
-      <div><label className="text-sm font-bold">アイコン</label><EmojiPicker value={icon} onChange={setIcon} options={PROJECT_ICONS} /></div>
-      <div><label className="text-sm font-bold">カラー</label><ColorPicker value={color} onChange={setColor} options={PROJECT_COLORS} /></div>
+  return <Modal open onClose={onClose} title="プロジェクトを作成" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>作成する</Btn></>}>
+    <div className="space-y-4">
       <div>
-        <label className="text-sm font-bold">テンプレート</label>
-        <Select value={template} onChange={setTemplate} className="w-full" options={[
-          {value:'default',label:'シンプル（未着手/進行中/完了）'},
-          {value:'dev',label:'開発（バックログ/設計/開発/レビュー/完了）'},
-          {value:'sales',label:'営業（リード→受注フロー）'},
-          {value:'marketing',label:'マーケティング（企画→配信フロー）'},
-          {value:'pr',label:'広報（取材→配信フロー）'},
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">プロジェクト名</label>
+        <Input value={name} onChange={setName} placeholder="例：◯◯社 採用サイト改修" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カラー</label>
+        <div className="mt-1.5"><ColorPicker value={color} onChange={setColor} options={PROJECT_COLORS} /></div>
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">テンプレート</label>
+        <Select value={template} onChange={setTemplate} className="w-full mt-1.5" options={[
+          {value:'default',  label:'標準（未着手 / 進行中 / 完了）'},
+          {value:'web',      label:'制作案件（バックログ → 今週やる → レビュー → 完了）'},
+          {value:'dev',      label:'プロダクト開発（Backlog / In Progress / QA / Done）'},
+          {value:'sales',    label:'営業パイプライン（リード → 受注／失注）'},
+          {value:'marketing',label:'マーケ施策（企画 → 配信）'},
+          {value:'hr',       label:'採用パイプライン（応募 → 内定）'},
         ]} />
       </div>
     </div>
@@ -2281,26 +2552,40 @@ function NewListModal({ onClose }) {
   const { state, dispatch } = useApp();
   const [name, setName] = useState('');
   const [autoStatus, setAutoStatus] = useState('');
-  return <Modal open onClose={onClose} size="sm" title="新しいリスト" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name.trim()){dispatch({type:'ADD_LIST',projectId:state.selectedProjectId,name:name.trim(),autoStatus:autoStatus||null});onClose();}}}>追加</Btn></>}>
-    <div className="space-y-2">
-      <Input value={name} onChange={setName} placeholder="リスト名" />
-      <Select value={autoStatus} onChange={setAutoStatus} className="w-full" options={[
-        {value:'',label:'ステータス自動変更: なし'},
-        ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
-      ]} />
+  return <Modal open onClose={onClose} size="sm" title="リストを追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name.trim()){dispatch({type:'ADD_LIST',projectId:state.selectedProjectId,name:name.trim(),autoStatus:autoStatus||null});onClose();}}}>追加</Btn></>}>
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">リスト名</label>
+        <Input value={name} onChange={setName} placeholder="例：レビュー待ち" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">移動時のステータス</label>
+        <Select value={autoStatus} onChange={setAutoStatus} className="w-full mt-1.5" options={[
+          {value:'',label:'変更しない'},
+          ...STATUSES.map(s=>({value:s.id,label:'→ '+s.label}))
+        ]} />
+      </div>
     </div>
   </Modal>;
 }
 
 function NewMemberModal({ onClose }) {
   const { dispatch, setMsg } = useApp();
-  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [role, setRole] = useState('staff'); const [avatar, setAvatar] = useState('👤');
-  return <Modal open onClose={onClose} size="sm" title="メンバーを追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name && email){dispatch({type:'ADD_ORG_MEMBER',name,email,role,avatar}); setMsg('メンバーを追加'); onClose();}}}>追加</Btn></>}>
-    <div className="space-y-2">
-      <Input value={name} onChange={setName} placeholder="名前" />
-      <Input value={email} onChange={setEmail} placeholder="メール" type="email" />
-      <Select value={role} onChange={setRole} options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
-      <div><label className="text-xs">アバター</label><EmojiPicker value={avatar} onChange={setAvatar} options={AVATAR_EMOJIS} /></div>
+  const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [role, setRole] = useState('staff');
+  return <Modal open onClose={onClose} size="sm" title="メンバーを追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(name && email){dispatch({type:'ADD_ORG_MEMBER',name,email,role}); setMsg('メンバーを追加しました'); onClose();}}}>追加</Btn></>}>
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">名前</label>
+        <Input value={name} onChange={setName} placeholder="例：佐藤 健" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">メールアドレス</label>
+        <Input value={email} onChange={setEmail} placeholder="sato@example.com" type="email" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">権限</label>
+        <Select value={role} onChange={setRole} className="w-full mt-1.5" options={ORG_ROLES.map(r=>({value:r.id,label:r.label}))} />
+      </div>
     </div>
   </Modal>;
 }
@@ -2308,10 +2593,16 @@ function NewMemberModal({ onClose }) {
 function NewBookmarkModal({ onClose }) {
   const { dispatch } = useApp();
   const [title, setTitle] = useState(''); const [url, setUrl] = useState('');
-  return <Modal open onClose={onClose} size="sm" title="ブックマーク追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&url){dispatch({type:'ADD_BOOKMARK',title,url}); onClose();}}}>追加</Btn></>}>
-    <div className="space-y-2">
-      <Input value={title} onChange={setTitle} placeholder="タイトル" />
-      <Input value={url} onChange={setUrl} placeholder="https://..." />
+  return <Modal open onClose={onClose} size="sm" title="ブックマークを追加" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&url){dispatch({type:'ADD_BOOKMARK',title,url}); onClose();}}}>追加</Btn></>}>
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">タイトル</label>
+        <Input value={title} onChange={setTitle} placeholder="例：社内ポータル" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">URL</label>
+        <Input value={url} onChange={setUrl} placeholder="https://..." className="mt-1.5" />
+      </div>
     </div>
   </Modal>;
 }
@@ -2319,10 +2610,16 @@ function NewBookmarkModal({ onClose }) {
 function NewAnnouncementModal({ onClose }) {
   const { dispatch } = useApp();
   const [title, setTitle] = useState(''); const [body, setBody] = useState('');
-  return <Modal open onClose={onClose} title="掲示板に投稿" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&body){dispatch({type:'ADD_ANNOUNCEMENT',title,body}); onClose();}}}>投稿</Btn></>}>
-    <div className="space-y-2">
-      <Input value={title} onChange={setTitle} placeholder="タイトル" />
-      <Textarea value={body} onChange={setBody} placeholder="本文（マークダウン対応）" rows={6} />
+  return <Modal open onClose={onClose} title="お知らせを投稿" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(title&&body){dispatch({type:'ADD_ANNOUNCEMENT',title,body}); onClose();}}}>投稿する</Btn></>}>
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">タイトル</label>
+        <Input value={title} onChange={setTitle} placeholder="例：5月の運用フローについて" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">本文</label>
+        <Textarea value={body} onChange={setBody} placeholder="マークダウンが使えます" rows={6} className="mt-1.5" />
+      </div>
     </div>
   </Modal>;
 }
@@ -2345,16 +2642,20 @@ function ImportCSVModal({ onClose }) {
     setMsg(`${rows.length}件のタスクをインポートしました`);
     onClose();
   };
-  return <Modal open onClose={onClose} title="CSV インポート" size="lg" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>インポート</Btn></>}>
-    <div className="space-y-2">
-      <Select value={projectId} onChange={setProjectId} className="w-full" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
-      <p className="text-xs text-gray-500">1行目はヘッダー: リスト, タイトル, 説明, 開始日, 締切日</p>
-      <Textarea value={text} onChange={setText} rows={10} className="font-mono text-xs" />
+  return <Modal open onClose={onClose} title="CSV から取り込み" size="lg" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>取り込み</Btn></>}>
+    <div className="space-y-3">
       <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">対象プロジェクト</label>
+        <Select value={projectId} onChange={setProjectId} className="w-full mt-1.5" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
+      </div>
+      <p className="text-[12px] text-ink-500">1行目はヘッダー：<code className="text-[11px]">リスト, タイトル, 説明, 開始日, 締切日</code></p>
+      <Textarea value={text} onChange={setText} rows={10} className="font-mono text-[12px]" />
+      <div>
+        <label className="text-[12px] text-ink-500">またはCSVファイルを選択：</label>
         <input type="file" accept=".csv,.txt" onChange={e=>{
           const f = e.target.files[0]; if (!f) return;
           const r = new FileReader(); r.onload = ev => setText(ev.target.result); r.readAsText(f, 'UTF-8');
-        }} />
+        }} className="mt-1 text-[12px] file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-ink-100 file:text-ink-700 dark:file:bg-ink-700 dark:file:text-ink-200 file:text-[11px]" />
       </div>
     </div>
   </Modal>;
@@ -2381,11 +2682,17 @@ function AIGenerateModal({ onClose }) {
   const { state, dispatch, setMsg } = useApp();
   const [projectId, setProjectId] = useState(state.selectedProjectId);
   const [prompt, setPrompt] = useState('');
-  return <Modal open onClose={onClose} title="🤖 AIでタスクを自動生成" size="md" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(prompt&&projectId){dispatch({type:'AI_GENERATE_TASKS',projectId,prompt}); setMsg('タスクを生成しました'); onClose();}}}>✨ 生成</Btn></>}>
-    <div className="space-y-2">
-      <p className="text-sm text-gray-500">プロジェクト概要を入力すると、AIが必要なタスクを自動展開します</p>
-      <Select value={projectId} onChange={setProjectId} className="w-full" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
-      <Textarea value={prompt} onChange={setPrompt} placeholder="例: 新製品ローンチに向けた告知キャンペーン" rows={3} />
+  return <Modal open onClose={onClose} title="アシスタント" size="md" footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={()=>{if(prompt&&projectId){dispatch({type:'AI_GENERATE_TASKS',projectId,prompt}); setMsg('タスクの下書きを作成しました'); onClose();}}}>下書きを作成</Btn></>}>
+    <div className="space-y-3">
+      <p className="text-[13px] text-ink-500">プロジェクトの概要を入れると、それらしいタスクを並べます。中身はあとから自由に調整してください。</p>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">対象プロジェクト</label>
+        <Select value={projectId} onChange={setProjectId} className="w-full mt-1.5" options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">概要</label>
+        <Textarea value={prompt} onChange={setPrompt} placeholder="例：新製品ローンチに向けた告知キャンペーンを企画する" rows={3} className="mt-1.5" />
+      </div>
     </div>
   </Modal>;
 }
@@ -2393,18 +2700,18 @@ function AIGenerateModal({ onClose }) {
 function SwitchOrgModal({ onClose }) {
   const { state } = useApp();
   return <Modal open onClose={onClose} title="組織" size="sm">
-    <div className="space-y-1">
+    <div className="space-y-2">
       {state.organizations.map(o => (
-        <div key={o.id} className="p-3 rounded border dark:border-gray-700 flex items-center gap-2">
-          <span className="text-2xl">{o.icon}</span>
+        <div key={o.id} className="p-3 rounded-md hairline flex items-center gap-3">
+          <span className="w-9 h-9 rounded-md bg-ink-900 dark:bg-ink-700 text-white text-sm flex items-center justify-center font-medium">{o.name.slice(0,1)}</span>
           <div className="flex-1">
-            <div className="font-medium">{o.name}</div>
-            <div className="text-xs text-gray-500">{o.members.length}名</div>
+            <div className="text-[13px] font-medium">{o.name}</div>
+            <div className="text-[11px] text-ink-400 num">{o.members.length}名</div>
           </div>
-          {o.id===state.currentOrgId && <span className="text-xs text-blue-600">使用中</span>}
+          {o.id===state.currentOrgId && <span className="text-[10px] uppercase tracking-wider text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-900/30 px-2 py-0.5 rounded font-semibold">使用中</span>}
         </div>
       ))}
-      <p className="text-xs text-gray-500 mt-2">※ デモのため複数組織の作成は省略しています</p>
+      <p className="text-[11px] text-ink-400 pt-2">※ デモ環境のため複数組織の作成は省略しています</p>
     </div>
   </Modal>;
 }
@@ -2442,7 +2749,10 @@ function App() {
       case 'dashboard': return <Dashboard />;
       case 'all-tasks': return <AllTasksView />;
       case 'all-gantt': return <div className="flex-1 flex flex-col">
-        <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800"><h2 className="text-xl font-bold">📅 全てのガントチャート</h2></div>
+        <div className="px-6 py-3.5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800">
+          <h2 className="text-[16px] font-semibold tracking-tight">全てのガントチャート</h2>
+          <p className="text-[11px] text-ink-400 mt-0.5">全プロジェクトを横断して表示しています。</p>
+        </div>
         <GanttView allProjects />
       </div>;
       case 'archive': return <ArchiveView />;
@@ -2452,10 +2762,12 @@ function App() {
       case 'ai': return <AIView />;
       case 'history': return <HistoryView />;
       case 'gantt': return <div className="flex-1 flex flex-col">
-        <div className="px-4 py-3 border-b dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
-          {(() => { const p = state.projects.find(p => p.id===state.selectedProjectId); return p ? <h2 className="text-xl font-bold">{p.icon} {p.name} - ガント</h2> : null; })()}
-          <div className="ml-auto flex gap-1">
-            <Btn size="sm" variant="outline" onClick={()=>dispatch({type:'SET_VIEW',view:'board'})}>カンバンへ</Btn>
+        <div className="px-6 py-3.5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex items-center gap-3 flex-wrap">
+          {(() => { const p = state.projects.find(p => p.id===state.selectedProjectId); return p ? <div className="flex items-center gap-2.5"><span className={`w-2.5 h-2.5 rounded-full bg-${p.color}-500`}></span><h2 className="text-[16px] font-semibold tracking-tight">{p.name}</h2><span className="text-ink-400 text-[12px]">/ ガントチャート</span></div> : null; })()}
+          <div className="ml-auto flex items-center gap-1 bg-ink-100 dark:bg-ink-700/40 rounded-md p-0.5">
+            <button onClick={()=>dispatch({type:'SET_VIEW',view:'board'})} className="px-3 py-1 text-[12px] rounded text-ink-600 dark:text-ink-300 hover:text-ink-900">カンバン</button>
+            <button className="px-3 py-1 text-[12px] rounded bg-white dark:bg-ink-800 shadow-sm font-semibold">ガント</button>
+            <button onClick={()=>dispatch({type:'SET_VIEW',view:'project-settings'})} className="px-3 py-1 text-[12px] rounded text-ink-600 dark:text-ink-300 hover:text-ink-900">設定</button>
           </div>
         </div>
         <GanttView projectId={state.selectedProjectId} />
