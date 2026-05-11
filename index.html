@@ -136,6 +136,37 @@ const LABEL_COLORS = [
   { id: 'pink',   bg: 'bg-pink-500',   light: 'bg-pink-100 text-pink-800' },
   { id: 'gray',   bg: 'bg-gray-500',   light: 'bg-gray-200 text-gray-800' },
 ];
+/* ===== Booking statuses (汎用) ===== */
+const BOOKING_STATUSES = [
+  { id:'tentative',   label:'仮予約',     color:'bg-amber-500',   light:'bg-amber-100 text-amber-800',     hint:'要確認' },
+  { id:'confirmed',   label:'確定',       color:'bg-accent-600',  light:'bg-accent-100 text-accent-800',   hint:'予定どおり' },
+  { id:'in_use',      label:'貸出中',     color:'bg-emerald-600', light:'bg-emerald-100 text-emerald-800', hint:'稼働中' },
+  { id:'returned',    label:'返却済み',   color:'bg-ink-400',     light:'bg-ink-200 text-ink-800',         hint:'完了' },
+  { id:'maintenance', label:'整備・点検', color:'bg-orange-500',  light:'bg-orange-100 text-orange-800',   hint:'稼働不可' },
+  { id:'scheduled',   label:'投稿予約',   color:'bg-accent-600',  light:'bg-accent-100 text-accent-800',   hint:'配信予定' },
+  { id:'draft',       label:'下書き',     color:'bg-ink-400',     light:'bg-ink-200 text-ink-800',         hint:'準備中' },
+  { id:'published',   label:'公開済み',   color:'bg-emerald-600', light:'bg-emerald-100 text-emerald-800', hint:'配信完了' },
+  { id:'canceled',    label:'キャンセル', color:'bg-rose-500',    light:'bg-rose-100 text-rose-800',       hint:'取消' },
+];
+const bookingStatusObj = (id) => BOOKING_STATUSES.find(s=>s.id===id) || BOOKING_STATUSES[0];
+
+const SCHEDULE_PRESETS = [
+  { id:'car',     name:'レンタカー予約',   color:'sky',     resourceLabel:'車両',       bookingLabel:'予約',       statuses:['tentative','confirmed','in_use','returned','maintenance','canceled'],
+    sampleResources:['コンパクトカー','ミニバン','軽自動車'] },
+  { id:'sns',     name:'SNS投稿カレンダー', color:'rose',    resourceLabel:'アカウント', bookingLabel:'投稿',       statuses:['draft','scheduled','published','canceled'],
+    sampleResources:['公式 X','Instagram','TikTok'] },
+  { id:'meeting', name:'会議室の予約',     color:'indigo',  resourceLabel:'会議室',     bookingLabel:'予約',       statuses:['tentative','confirmed','canceled'],
+    sampleResources:['会議室A','会議室B','応接室'] },
+  { id:'shift',   name:'スタッフシフト',   color:'emerald', resourceLabel:'スタッフ',   bookingLabel:'シフト',     statuses:['confirmed','canceled'],
+    sampleResources:['田中','鈴木','佐藤'] },
+  { id:'gear',    name:'機材の貸出',       color:'amber',   resourceLabel:'機材',       bookingLabel:'貸出',       statuses:['tentative','confirmed','in_use','returned','maintenance'],
+    sampleResources:['ノートPC #1','一眼レフ','プロジェクター'] },
+  { id:'rooms',   name:'宿泊施設の予約',   color:'teal',    resourceLabel:'部屋',       bookingLabel:'予約',       statuses:['tentative','confirmed','in_use','returned','canceled'],
+    sampleResources:['101号室','201号室','202号室'] },
+  { id:'custom',  name:'空のタイムライン', color:'slate',   resourceLabel:'リソース',   bookingLabel:'予定',       statuses:['tentative','confirmed','canceled'],
+    sampleResources:[] },
+];
+
 const PROJECT_ICONS = ['◆','◇','■','□','●','○','▲','△','★','☆','◉','◎','◐','◑','✦','✧','♦','♢','▣','▤'];
 const PROJECT_COLORS = ['indigo','sky','teal','emerald','amber','orange','rose','purple','slate','stone'];
 const AVATAR_INITIALS_BG = ['bg-indigo-500','bg-sky-500','bg-teal-500','bg-emerald-500','bg-amber-500','bg-orange-500','bg-rose-500','bg-purple-500','bg-slate-500','bg-fuchsia-500'];
@@ -495,6 +526,47 @@ function seedData() {
       { id: uid('k'), name:'GitHub Actions（CI連携）', key:'sk_'+Math.random().toString(36).slice(2,18), createdAt: ts - 1000*60*60*24*30 },
     ],
     aiSettings: { feedbackTone: 3, summaryDetail: 3 },
+    schedules: [
+      {
+        id: 'sch_car', orgId, name: 'レンタカー予約', color: 'sky', archived: false, createdAt: ts, favorite: true,
+        resourceLabel: '車両', bookingLabel: '予約',
+        resources: [
+          { id: 'r_car_1', name: 'ヴィッツ',   subtitle: '品川 500 あ 12-34 / 4名 / コンパクト', color: 'sky' },
+          { id: 'r_car_2', name: 'セレナ',     subtitle: '品川 500 い 56-78 / 7名 / ミニバン',    color: 'indigo' },
+          { id: 'r_car_3', name: 'ハイエース', subtitle: '品川 100 う 99-99 / 10名 / バン',       color: 'amber' },
+          { id: 'r_car_4', name: 'N-BOX',      subtitle: '品川 580 え 11-11 / 4名 / 軽',           color: 'emerald' },
+          { id: 'r_car_5', name: 'プリウス',   subtitle: '品川 300 お 22-22 / 5名 / セダン',       color: 'rose' },
+        ],
+        bookings: [
+          { id: 'bk_1', resourceId: 'r_car_1', title: '田中 様（個人）',     start: addDays(today(),0),  end: addDays(today(),2),  status: 'confirmed', notes: '17:00 受け渡し / 免責補償あり', customer: '田中 太郎' },
+          { id: 'bk_2', resourceId: 'r_car_2', title: '佐藤 様（家族旅行）', start: addDays(today(),3),  end: addDays(today(),6),  status: 'confirmed', notes: 'チャイルドシート2台',           customer: '佐藤 美穂' },
+          { id: 'bk_3', resourceId: 'r_car_3', title: '株式会社みらい',       start: addDays(today(),1),  end: addDays(today(),5),  status: 'confirmed', notes: '社員旅行（10名）',               customer: '株式会社みらい' },
+          { id: 'bk_4', resourceId: 'r_car_4', title: '鈴木 様',              start: addDays(today(),-1), end: addDays(today(),0),  status: 'returned',  notes: '返却済み・問題なし',             customer: '鈴木 一郎' },
+          { id: 'bk_5', resourceId: 'r_car_4', title: '高橋 様',              start: addDays(today(),2),  end: addDays(today(),3),  status: 'tentative', notes: '電話確認待ち',                   customer: '高橋 拓也' },
+          { id: 'bk_6', resourceId: 'r_car_5', title: '山田 様（出張）',     start: addDays(today(),4),  end: addDays(today(),8),  status: 'confirmed', notes: '空港ピックアップ',               customer: '山田 健' },
+          { id: 'bk_7', resourceId: 'r_car_1', title: '点検（業者）',         start: addDays(today(),7),  end: addDays(today(),7),  status: 'maintenance', notes: '半年点検 — オートバックス入庫', customer: '' },
+        ],
+      },
+      {
+        id: 'sch_sns', orgId, name: 'SNS投稿カレンダー', color: 'rose', archived: false, createdAt: ts, favorite: false,
+        resourceLabel: 'アカウント', bookingLabel: '投稿',
+        resources: [
+          { id: 'r_sns_x',  name: '公式 X (Twitter)', subtitle: '@aozora_official / フォロワー 8.2k', color: 'sky' },
+          { id: 'r_sns_ig', name: 'Instagram',        subtitle: '@aozora.gram / フォロワー 5.1k',     color: 'rose' },
+          { id: 'r_sns_tt', name: 'TikTok',           subtitle: '@aozora_tiktok / フォロワー 2.3k',   color: 'ink' },
+          { id: 'r_sns_yt', name: 'YouTube',          subtitle: '@aozora-channel / 登録者 1.4k',      color: 'rose' },
+        ],
+        bookings: [
+          { id: 'bp_1', resourceId: 'r_sns_x',  title: '新車入荷告知（プリウス）', start: addDays(today(),0), end: addDays(today(),0), status: 'scheduled', notes: '14:00 配信予定', customer: '' },
+          { id: 'bp_2', resourceId: 'r_sns_ig', title: '店舗フォト：店内リニューアル', start: addDays(today(),1), end: addDays(today(),1), status: 'scheduled', notes: '18:00 配信 / リール', customer: '' },
+          { id: 'bp_3', resourceId: 'r_sns_tt', title: '試乗動画：ヴィッツ走行レビュー', start: addDays(today(),3), end: addDays(today(),3), status: 'draft',     notes: '撮影は5/13、編集は5/14', customer: '' },
+          { id: 'bp_4', resourceId: 'r_sns_yt', title: '長尺：レンタカーの選び方', start: addDays(today(),7), end: addDays(today(),7), status: 'draft',     notes: '台本準備中', customer: '' },
+          { id: 'bp_5', resourceId: 'r_sns_x',  title: 'GW振り返りキャンペーン投稿', start: addDays(today(),5), end: addDays(today(),5), status: 'scheduled', notes: '10:00 配信予定', customer: '' },
+          { id: 'bp_6', resourceId: 'r_sns_ig', title: 'お客様の声：佐藤様 家族旅行', start: addDays(today(),9), end: addDays(today(),9), status: 'draft',     notes: '掲載許諾済み', customer: '' },
+        ],
+      },
+    ],
+    selectedScheduleId: 'sch_car',
   };
 }
 function mkTask(o){ return Object.assign({
@@ -513,7 +585,9 @@ function reducer(state, action) {
   });
   switch (action.type) {
     case 'SET_VIEW':
-      return { ...state, view: action.view, selectedProjectId: action.projectId ?? state.selectedProjectId };
+      return { ...state, view: action.view,
+        selectedProjectId: action.projectId ?? state.selectedProjectId,
+        selectedScheduleId: action.scheduleId ?? state.selectedScheduleId };
     case 'TOGGLE_DARK':
       return { ...state, darkMode: !state.darkMode };
     case 'TOGGLE_SIDEBAR':
@@ -814,6 +888,65 @@ function reducer(state, action) {
     case 'RESET_DATA':
       return seedData();
 
+    /* ===== Schedules ===== */
+    case 'ADD_SCHEDULE': {
+      const id = uid('sch');
+      const sch = {
+        id, orgId: state.currentOrgId, name: action.name, color: action.color || 'sky',
+        archived: false, createdAt: ts, favorite: false,
+        resourceLabel: action.resourceLabel || 'リソース',
+        bookingLabel: action.bookingLabel || '予定',
+        resources: (action.resources || []).map(r => typeof r === 'string'
+          ? { id: uid('r'), name: r, subtitle: '', color: action.color || 'sky' }
+          : { id: uid('r'), name: r.name, subtitle: r.subtitle||'', color: r.color||action.color||'sky' }),
+        bookings: [],
+      };
+      return { ...state, schedules: [...(state.schedules||[]), sch], selectedScheduleId: id, view: 'schedule',
+        history: [log('schedule_created', `タイムライン「${action.name}」を作成`), ...state.history] };
+    }
+    case 'UPDATE_SCHEDULE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.id ? { ...s, ...action.patch } : s) };
+    case 'ARCHIVE_SCHEDULE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.id ? { ...s, archived:true } : s) };
+    case 'RESTORE_SCHEDULE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.id ? { ...s, archived:false } : s) };
+    case 'DELETE_SCHEDULE':
+      return { ...state, schedules: state.schedules.filter(s => s.id!==action.id) };
+    case 'TOGGLE_FAVORITE_SCHEDULE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.id ? { ...s, favorite: !s.favorite } : s) };
+
+    case 'ADD_RESOURCE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, resources: [...s.resources, { id: uid('r'), name: action.name, subtitle: action.subtitle||'', color: action.color || s.color }]
+      } : s) };
+    case 'UPDATE_RESOURCE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, resources: s.resources.map(r => r.id===action.resourceId ? { ...r, ...action.patch } : r)
+      } : s) };
+    case 'DELETE_RESOURCE':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, resources: s.resources.filter(r => r.id!==action.resourceId),
+        bookings: s.bookings.filter(b => b.resourceId !== action.resourceId)
+      } : s) };
+
+    case 'ADD_BOOKING': {
+      const b = { id: uid('bk'), resourceId: action.resourceId, title: action.title||'新規予定',
+        start: action.start, end: action.end || action.start,
+        status: action.status || 'confirmed', notes: action.notes||'', customer: action.customer||'',
+        createdAt: ts };
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, bookings: [...s.bookings, b]
+      } : s) };
+    }
+    case 'UPDATE_BOOKING':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, bookings: s.bookings.map(b => b.id===action.bookingId ? { ...b, ...action.patch } : b)
+      } : s) };
+    case 'DELETE_BOOKING':
+      return { ...state, schedules: state.schedules.map(s => s.id===action.scheduleId ? {
+        ...s, bookings: s.bookings.filter(b => b.id!==action.bookingId)
+      } : s) };
+
     default:
       return state;
   }
@@ -999,7 +1132,7 @@ function Sidebar() {
           {!collapsed && <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-[0.08em]">プロジェクト</span>}
           <button onClick={()=>openModal('newProject')} title="新しいプロジェクト" className="text-ink-400 hover:text-accent-600 hover:bg-accent-50 dark:hover:bg-accent-900/30 rounded w-5 h-5 flex items-center justify-center text-base leading-none">+</button>
         </div>
-        <div className="space-y-px max-h-[40vh] overflow-y-auto scrollbar-thin">
+        <div className="space-y-px max-h-[28vh] overflow-y-auto scrollbar-thin">
           {projects.sort((a,b)=> (b.favorite?1:0)-(a.favorite?1:0)).map(p => {
             const tasksCount = state.tasks.filter(t => t.projectId===p.id && !t.archived && t.status!=='completed').length;
             const active = state.selectedProjectId===p.id && (state.view==='board' || state.view==='gantt' || state.view==='project-settings');
@@ -1011,6 +1144,27 @@ function Sidebar() {
                 <span className="flex-1 text-left leading-snug break-words">{p.name}</span>
                 {p.favorite && <span className="text-amber-500 text-xs flex-shrink-0">★</span>}
                 {tasksCount > 0 && <span className="text-[10px] text-ink-500 num flex-shrink-0 tabular-nums">{tasksCount}</span>}
+              </>}
+            </button>;
+          })}
+        </div>
+      </div>
+
+      <div className="px-2 py-2 border-t border-ink-200 dark:border-ink-700/60">
+        <div className="flex items-center justify-between px-2 mb-1.5">
+          {!collapsed && <span className="text-[10px] font-semibold text-ink-400 uppercase tracking-[0.08em]">タイムライン</span>}
+          <button onClick={()=>openModal('newSchedule')} title="新しいタイムライン" className="text-ink-400 hover:text-accent-600 hover:bg-accent-50 dark:hover:bg-accent-900/30 rounded w-5 h-5 flex items-center justify-center text-base leading-none">+</button>
+        </div>
+        <div className="space-y-px max-h-[28vh] overflow-y-auto scrollbar-thin">
+          {(state.schedules||[]).filter(s => s.orgId===state.currentOrgId && !s.archived).sort((a,b)=>(b.favorite?1:0)-(a.favorite?1:0)).map(s => {
+            const active = state.selectedScheduleId===s.id && state.view==='schedule';
+            return <button key={s.id} onClick={()=>dispatch({ type:'SET_VIEW', view:'schedule', scheduleId:s.id })} title={s.name}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] group ${active?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200':'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800/60'}`}>
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 bg-${s.color}-500`}></span>
+              {!collapsed && <>
+                <span className="flex-1 text-left leading-snug break-words">{s.name}</span>
+                {s.favorite && <span className="text-amber-500 text-xs flex-shrink-0">★</span>}
+                <span className="text-[10px] text-ink-500 num flex-shrink-0">{s.bookings.length}</span>
               </>}
             </button>;
           })}
@@ -2217,6 +2371,453 @@ function GanttView({ projectId, allProjects }) {
   );
 }
 
+/* =========================================
+ * Schedule (Resource Timeline) View
+ * ========================================= */
+function ScheduleView() {
+  const { state, dispatch, openModal, setMsg } = useApp();
+  const sch = (state.schedules||[]).find(s => s.id===state.selectedScheduleId);
+  const [zoom, setZoom] = useState('day');
+  const [scope, setScope] = useState('auto');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [editing, setEditing] = useState(null); // booking object or {new:true, resourceId, start}
+  const [resourcePane, setResourcePane] = useState(false);
+  const [drag, setDrag] = useState(null);
+  const containerRef = useRef(null);
+  const org = state.organizations.find(o => o.id===state.currentOrgId);
+
+  if (!sch) {
+    return <div className="flex-1 flex items-center justify-center bg-white dark:bg-ink-800">
+      <div className="text-center">
+        <p className="text-ink-500 mb-3 text-[14px]">タイムラインがまだ作成されていません。</p>
+        <Btn onClick={()=>openModal('newSchedule')}>＋ 新しいタイムラインを作る</Btn>
+      </div>
+    </div>;
+  }
+
+  const allBookings = sch.bookings.filter(b => !filterStatus || b.status===filterStatus);
+  if (allBookings.length === 0 && sch.resources.length === 0) {
+    return <ScheduleEmpty sch={sch} />;
+  }
+
+  let dates = allBookings.flatMap(b => [b.start, b.end]).filter(Boolean).sort();
+  let minD = dates[0] || addDays(today(), -7);
+  let maxD = dates[dates.length-1] || addDays(today(), 14);
+  if (scope === 'month')   { minD = today().slice(0,8)+'01'; maxD = addDays(minD, 31); }
+  if (scope === 'quarter') { const m = new Date(today()); m.setDate(1); m.setMonth(m.getMonth()-1); minD = m.toISOString().split('T')[0]; maxD = addDays(minD, 92); }
+  if (scope === 'half')    { const m = new Date(today()); m.setDate(1); m.setMonth(m.getMonth()-1); minD = m.toISOString().split('T')[0]; maxD = addDays(minD, 184); }
+  const startD = addDays(minD, -3);
+  const endD   = addDays(maxD, 7);
+  const totalDays = daysBetween(startD, endD);
+  const dayWidth = zoom==='day' ? 36 : zoom==='week' ? 16 : 6;
+  const colWidth = 220;
+  const rowHeight = 56;
+
+  const dayStrs = []; for (let i=0; i<=totalDays; i++) dayStrs.push(addDays(startD, i));
+  const monthGroups = [];
+  dayStrs.forEach(d => { const dt=new Date(d); const k=`${dt.getFullYear()}-${dt.getMonth()+1}`; const last=monthGroups[monthGroups.length-1]; if (last&&last.key===k) last.count++; else monthGroups.push({key:k,label:`${dt.getFullYear()}年${dt.getMonth()+1}月`,count:1});});
+
+  const isHoliday = (d) => {
+    const dt = new Date(d);
+    if (org.holidays.weeklyOff.includes(dt.getDay())) return true;
+    if (org.holidays.jpHolidays && JP_HOLIDAYS.has(d)) return true;
+    if (org.holidays.customHolidays.includes(d)) return true;
+    return false;
+  };
+
+  const jumpToToday = () => {
+    if (!containerRef.current) return;
+    const off = daysBetween(startD, today())*dayWidth - 200;
+    containerRef.current.scrollTo({ left: Math.max(0, off), behavior:'smooth' });
+  };
+
+  // Drag handler
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e) => {
+      const dx = e.clientX - drag.startX;
+      const days = Math.round(dx / dayWidth);
+      if (days === drag.lastDays) return;
+      setDrag({ ...drag, lastDays: days });
+    };
+    const onUp = () => {
+      const b = sch.bookings.find(x => x.id===drag.bookingId);
+      if (b) {
+        const days = drag.lastDays || 0;
+        const patch = {};
+        if (drag.edge==='start' || drag.edge==='move') patch.start = addDays(b.start, days);
+        if (drag.edge==='end'   || drag.edge==='move') patch.end   = addDays(b.end,   days);
+        if (patch.start && patch.end && patch.start > patch.end) { const a=patch.start; patch.start=patch.end; patch.end=a; }
+        if (Object.keys(patch).length) {
+          dispatch({ type:'UPDATE_BOOKING', scheduleId: sch.id, bookingId: b.id, patch });
+          setMsg('期間を更新しました');
+        }
+      }
+      setDrag(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [drag, dayWidth, sch?.bookings]);
+
+  const startDrag = (e, bookingId, edge) => { e.stopPropagation(); e.preventDefault(); setDrag({ bookingId, edge, startX: e.clientX, lastDays: 0 }); };
+  const dragOff = drag ? drag.lastDays*dayWidth : 0;
+
+  const onLaneClick = (resourceId, dayStr) => {
+    setEditing({ new:true, scheduleId: sch.id, resourceId, start: dayStr, end: dayStr });
+  };
+
+  const exportICS = () => {
+    if (sch.bookings.length===0){ setMsg('予定がありません'); return; }
+    const tasks = sch.bookings.map(b => ({
+      id:b.id, title: `${b.title}${b.customer?` / ${b.customer}`:''}`,
+      description:b.notes||'', startDate:b.start, dueDate:b.end, taskNumber:0, status:'in_progress', projectId: sch.id,
+    }));
+    const fakeProjects = [{ id: sch.id, name: sch.name }];
+    downloadICS(`${sch.name}.ics`, buildICS(tasks, fakeProjects, org?.name));
+    setMsg(`${sch.bookings.length}件を .ics で書き出しました`);
+  };
+
+  const usedStatuses = Array.from(new Set(sch.bookings.map(b => b.status)));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-3.5 border-b border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex items-center gap-3 flex-wrap">
+        <span className={`w-2.5 h-2.5 rounded-full bg-${sch.color}-500`}></span>
+        <h2 className="text-[16px] font-semibold tracking-tight">{sch.name}</h2>
+        <button onClick={()=>dispatch({type:'TOGGLE_FAVORITE_SCHEDULE',id:sch.id})} className={`text-base hover:scale-110 transition ${sch.favorite?'text-amber-500':'text-ink-300 hover:text-amber-400'}`}>★</button>
+        <span className="text-[11px] text-ink-400 num">{sch.resourceLabel} {sch.resources.length}件 / {sch.bookingLabel} {sch.bookings.length}件</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Btn size="sm" variant="outline" onClick={()=>setResourcePane(!resourcePane)}>{sch.resourceLabel}を編集</Btn>
+          <Btn size="sm" onClick={()=>setEditing({new:true, scheduleId: sch.id, resourceId: sch.resources[0]?.id, start: today(), end: today() })}>＋ 新規{sch.bookingLabel}</Btn>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="px-4 py-2 border-b border-ink-200 dark:border-ink-700/60 bg-ink-50/70 dark:bg-ink-800/60 flex items-center gap-2 flex-wrap text-sm">
+        <div className="inline-flex bg-white dark:bg-ink-700/40 rounded-md p-0.5 hairline">
+          {[['day','日'],['week','週'],['month','月']].map(([k,l]) => (
+            <button key={k} onClick={()=>setZoom(k)} className={`px-2.5 py-1 text-[12px] rounded ${zoom===k?'bg-accent-600 text-white':'text-ink-600 hover:text-ink-900 dark:text-ink-300'}`}>{l}</button>
+          ))}
+        </div>
+        <Select value={scope} onChange={setScope} options={[
+          {value:'auto',   label:'期間：データに合わせる'},
+          {value:'month',  label:'期間：今月'},
+          {value:'quarter',label:'期間：3ヶ月'},
+          {value:'half',   label:'期間：6ヶ月'},
+        ]} />
+        <Select value={filterStatus} onChange={setFilterStatus} options={[
+          {value:'',label:'状態：すべて'},
+          ...BOOKING_STATUSES.filter(s => usedStatuses.includes(s.id)).map(s=>({value:s.id,label:s.label}))
+        ]} />
+        <div className="ml-auto flex items-center gap-2">
+          <Btn size="sm" variant="ghost" onClick={jumpToToday}>今日へ</Btn>
+          <Btn size="sm" variant="ghost" onClick={exportICS}>.ics</Btn>
+          <Btn size="sm" variant="ghost" onClick={()=>window.print()}>印刷</Btn>
+          <Btn size="sm" variant="ghost" onClick={()=>openModal('scheduleSettings')}>⚙ 設定</Btn>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 flex overflow-hidden">
+        <div ref={containerRef} className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
+          <div className="relative" style={{ minWidth: (totalDays+1)*dayWidth + colWidth }}>
+            {/* Header */}
+            <div className="sticky top-0 z-20 bg-white dark:bg-ink-800 border-b border-ink-200 dark:border-ink-700/60 shadow-sm">
+              <div className="flex">
+                <div className="px-3 py-1.5 border-r border-ink-200 dark:border-ink-700/60 text-[11px] uppercase tracking-wider text-ink-400 font-semibold flex items-center" style={{ width: colWidth }}>{sch.resourceLabel}</div>
+                <div className="flex">
+                  {monthGroups.map((m,i) => <div key={i} className="text-center text-[11px] text-ink-500 py-1 border-r border-ink-200 dark:border-ink-700/60 font-medium num" style={{ width: m.count*dayWidth }}>{m.label}</div>)}
+                </div>
+              </div>
+              <div className="flex border-t border-ink-100 dark:border-ink-700/40">
+                <div className="border-r border-ink-200 dark:border-ink-700/60" style={{ width: colWidth }}></div>
+                <div className="flex">
+                  {dayStrs.map(d => {
+                    const dt=new Date(d); const holiday=isHoliday(d);
+                    const todayCl=d===today()?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200 font-semibold':'';
+                    const dayColor=dt.getDay()===0?'text-rose-500':dt.getDay()===6?'text-sky-500':'text-ink-500';
+                    if (zoom==='month' && dt.getDate()!==1) return <div key={d} className={`border-r border-ink-100/60 dark:border-ink-700/30 ${holiday?'bg-rose-50/40 dark:bg-rose-900/10':''} ${todayCl}`} style={{width:dayWidth}} />;
+                    return <div key={d} className={`text-center text-[10px] border-r border-ink-100 dark:border-ink-700/40 num py-1 ${holiday&&!todayCl?'bg-rose-50/60 dark:bg-rose-900/15':''} ${todayCl}`} style={{ width: dayWidth }}>
+                      <div>{dt.getDate()}</div>
+                      {zoom!=='month' && <div className={dayColor}>{'日月火水木金土'[dt.getDay()]}</div>}
+                    </div>;
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Today line */}
+            <div className="absolute top-0 bottom-0 w-px bg-accent-500/60 z-10 pointer-events-none" style={{ left: colWidth + daysBetween(startD, today())*dayWidth + dayWidth/2 }}>
+              <div className="absolute -top-0.5 -translate-x-1/2 px-1 py-0.5 text-[9px] bg-accent-600 text-white rounded">今日</div>
+            </div>
+
+            {/* Resource rows */}
+            {sch.resources.length === 0 && <div className="px-6 py-12 text-center text-ink-400 text-[13px]">
+              {sch.resourceLabel}がまだありません。右上の「{sch.resourceLabel}を編集」から追加できます。
+            </div>}
+            {sch.resources.map(r => {
+              const lane = allBookings.filter(b => b.resourceId===r.id).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+              return <div key={r.id} className="flex border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50/30 dark:hover:bg-ink-700/10">
+                <div className="px-3 py-2 border-r border-ink-100 dark:border-ink-700/40 sticky left-0 bg-white dark:bg-ink-800 z-10" style={{ width: colWidth, height: rowHeight }}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full bg-${r.color||sch.color}-500 flex-shrink-0`}></span>
+                    <span className="text-[13px] font-medium truncate">{r.name}</span>
+                  </div>
+                  {r.subtitle && <div className="text-[11px] text-ink-500 truncate mt-0.5 ml-4">{r.subtitle}</div>}
+                </div>
+                <div className="relative flex" style={{ width: (totalDays+1)*dayWidth, height: rowHeight }}>
+                  {dayStrs.map(d => (
+                    <button key={d} onDoubleClick={()=>onLaneClick(r.id, d)}
+                      className={`border-r border-ink-100/60 dark:border-ink-700/30 ${isHoliday(d)?'bg-rose-50/30 dark:bg-rose-900/10':''} ${d===today()?'bg-accent-50/30 dark:bg-accent-900/10':''} hover:bg-accent-100/30 dark:hover:bg-accent-900/20`} style={{ width: dayWidth }} title="ダブルクリックで予定を追加" />
+                  ))}
+                  {lane.map(b => {
+                    const startOff = daysBetween(startD, b.start);
+                    const dur = Math.max(1, daysBetween(b.start, b.end||b.start) + 1);
+                    const sObj = bookingStatusObj(b.status);
+                    const isDt = drag && drag.bookingId===b.id;
+                    const xOff = isDt && (drag.edge==='move'||drag.edge==='start') ? dragOff : 0;
+                    const wAdj = isDt ? (drag.edge==='end' ? dragOff : drag.edge==='start' ? -dragOff : 0) : 0;
+                    const left = startOff*dayWidth + 3 + xOff;
+                    const width = Math.max(dur*dayWidth - 6 + wAdj, 14);
+                    return <div key={b.id} className="absolute" style={{ left, top: 8, width, height: rowHeight - 16 }}>
+                      <button onMouseDown={(e)=>startDrag(e, b.id, 'move')} onClick={(e)=>{ if(!drag) setEditing(b); }} title={`${b.title}（${fmtDate(b.start)} 〜 ${fmtDate(b.end||b.start)}）`}
+                        className={`relative w-full h-full rounded-md ${sObj.color} text-white text-[11px] flex flex-col items-start justify-center px-2 overflow-hidden font-medium shadow-sm cursor-grab active:cursor-grabbing`}>
+                        <span className="truncate w-full">{b.title}</span>
+                        {b.customer && <span className="truncate w-full text-[10px] opacity-80">{b.customer}</span>}
+                      </button>
+                      <span onMouseDown={(e)=>startDrag(e, b.id, 'start')} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-black/20" title="開始日を変更"></span>
+                      <span onMouseDown={(e)=>startDrag(e, b.id, 'end')}   className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-black/20" title="終了日を変更"></span>
+                    </div>;
+                  })}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        {/* Resource pane */}
+        {resourcePane && <ResourcePane sch={sch} onClose={()=>setResourcePane(false)} />}
+      </div>
+
+      {editing && <BookingModal scheduleId={sch.id} initial={editing} onClose={()=>setEditing(null)} />}
+    </div>
+  );
+}
+
+function ScheduleEmpty({ sch }) {
+  const { dispatch } = useApp();
+  return <div className="flex-1 flex items-center justify-center bg-white dark:bg-ink-800">
+    <div className="text-center max-w-md p-8">
+      <p className="text-[14px] font-medium mb-1">「{sch.name}」が空です</p>
+      <p className="text-[12px] text-ink-400 mb-4">まずは {sch.resourceLabel} を追加して、その上に {sch.bookingLabel} を並べていきます。</p>
+      <Btn onClick={()=>dispatch({type:'ADD_RESOURCE', scheduleId: sch.id, name:`${sch.resourceLabel} 1`})}>＋ {sch.resourceLabel}を1つ追加</Btn>
+    </div>
+  </div>;
+}
+
+function ResourcePane({ sch, onClose }) {
+  const { dispatch, setMsg } = useApp();
+  const [name, setName] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [color, setColor] = useState(sch.color);
+  const add = () => { if (!name.trim()) return; dispatch({type:'ADD_RESOURCE', scheduleId: sch.id, name: name.trim(), subtitle: subtitle.trim(), color}); setName(''); setSubtitle(''); setMsg(`${sch.resourceLabel}を追加しました`); };
+  return <div className="w-80 border-l border-ink-200 dark:border-ink-700/60 bg-white dark:bg-ink-800 flex flex-col">
+    <div className="px-4 py-3 border-b border-ink-200 dark:border-ink-700/60 flex items-center justify-between">
+      <div>
+        <h3 className="text-[13px] font-semibold">{sch.resourceLabel}を編集</h3>
+        <p className="text-[11px] text-ink-400 mt-0.5">{sch.resources.length}件</p>
+      </div>
+      <button onClick={onClose} className="text-ink-400 hover:text-ink-800 dark:hover:text-ink-100 text-xl leading-none w-7 h-7 flex items-center justify-center rounded hover:bg-ink-100 dark:hover:bg-ink-700">×</button>
+    </div>
+    <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin">
+      {sch.resources.map(r => <div key={r.id} className="p-2 hairline rounded-md group">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full bg-${r.color||sch.color}-500`}></span>
+          <input value={r.name} onChange={e=>dispatch({type:'UPDATE_RESOURCE',scheduleId:sch.id,resourceId:r.id,patch:{name:e.target.value}})}
+            className="flex-1 text-[13px] font-medium bg-transparent focus:outline-none focus:bg-white dark:focus:bg-ink-700 rounded px-1" />
+          <button onClick={()=>{if(confirm('この行と関連する予定を削除しますか？')) dispatch({type:'DELETE_RESOURCE',scheduleId:sch.id,resourceId:r.id});}} className="text-ink-300 hover:text-rose-500 text-[11px] opacity-0 group-hover:opacity-100">削除</button>
+        </div>
+        <input value={r.subtitle||''} onChange={e=>dispatch({type:'UPDATE_RESOURCE',scheduleId:sch.id,resourceId:r.id,patch:{subtitle:e.target.value}})}
+          placeholder="補足（ナンバー / 仕様 など）" className="w-full mt-1 text-[11px] text-ink-500 bg-transparent focus:outline-none focus:bg-white dark:focus:bg-ink-700 rounded px-1 placeholder:text-ink-300" />
+        <div className="mt-1.5"><ColorPicker size="sm" value={r.color||sch.color} onChange={c=>dispatch({type:'UPDATE_RESOURCE',scheduleId:sch.id,resourceId:r.id,patch:{color:c}})} options={LABEL_COLORS.map(c=>c.id)} /></div>
+      </div>)}
+    </div>
+    <div className="border-t border-ink-200 dark:border-ink-700/60 p-3 space-y-2">
+      <h4 className="text-[10px] uppercase tracking-wider text-ink-400 font-semibold">新しい{sch.resourceLabel}</h4>
+      <Input value={name} onChange={setName} placeholder={`${sch.resourceLabel}名`} />
+      <Input value={subtitle} onChange={setSubtitle} placeholder="補足（任意）" />
+      <ColorPicker size="sm" value={color} onChange={setColor} options={LABEL_COLORS.map(c=>c.id)} />
+      <Btn size="sm" className="w-full justify-center" onClick={add}>追加</Btn>
+    </div>
+  </div>;
+}
+
+function BookingModal({ scheduleId, initial, onClose }) {
+  const { state, dispatch, setMsg } = useApp();
+  const sch = state.schedules.find(s => s.id===scheduleId);
+  const isNew = initial.new;
+  const [title, setTitle]   = useState(initial.title || '');
+  const [resourceId, setResourceId] = useState(initial.resourceId || sch.resources[0]?.id || '');
+  const [start, setStart]   = useState(initial.start || today());
+  const [end,   setEnd]     = useState(initial.end || initial.start || today());
+  const [status, setStatus] = useState(initial.status || (sch.id==='sch_sns' || sch.bookingLabel==='投稿' ? 'scheduled' : 'confirmed'));
+  const [notes, setNotes]   = useState(initial.notes || '');
+  const [customer, setCustomer] = useState(initial.customer || '');
+  const save = () => {
+    if (!title.trim()) { setMsg('タイトルを入力してください'); return; }
+    if (isNew) {
+      dispatch({type:'ADD_BOOKING', scheduleId, resourceId, title: title.trim(), start, end, status, notes, customer});
+      setMsg(`${sch.bookingLabel}を追加しました`);
+    } else {
+      dispatch({type:'UPDATE_BOOKING', scheduleId, bookingId: initial.id, patch:{title:title.trim(), resourceId, start, end, status, notes, customer}});
+      setMsg(`${sch.bookingLabel}を更新しました`);
+    }
+    onClose();
+  };
+  const remove = () => { if (confirm('この予定を削除しますか？')){ dispatch({type:'DELETE_BOOKING', scheduleId, bookingId: initial.id}); onClose(); } };
+  const gcalUrl = (() => {
+    if (!start) return null;
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `[${sch.name}] ${title}`,
+      dates: `${ymdCompact(start)}/${ymdCompact(addDays(end||start, 1))}`,
+      details: `${notes}${customer?`\n顧客: ${customer}`:''}\n${sch.resources.find(r=>r.id===resourceId)?.name||''}`,
+    });
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  })();
+
+  return <Modal open onClose={onClose} title={isNew ? `${sch.bookingLabel}を追加` : `${sch.bookingLabel}を編集`} size="md"
+    footer={<>
+      {!isNew && <Btn variant="ghost" className="text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 mr-auto" onClick={remove}>削除</Btn>}
+      <Btn variant="ghost" onClick={onClose}>キャンセル</Btn>
+      <Btn onClick={save}>{isNew?'追加':'保存'}</Btn>
+    </>}>
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">タイトル</label>
+        <Input value={title} onChange={setTitle} placeholder={sch.bookingLabel+'の内容'} className="mt-1.5" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">{sch.resourceLabel}</label>
+          <Select value={resourceId} onChange={setResourceId} className="w-full mt-1.5"
+            options={sch.resources.map(r=>({value:r.id,label:r.name}))} />
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">状態</label>
+          <Select value={status} onChange={setStatus} className="w-full mt-1.5"
+            options={BOOKING_STATUSES.map(s=>({value:s.id,label:s.label}))} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">開始</label>
+          <input type="date" value={start} onChange={e=>setStart(e.target.value)} className="w-full mt-1.5 px-3 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-sm num" />
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">終了</label>
+          <input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="w-full mt-1.5 px-3 py-1.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-sm num" />
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">顧客 / 担当</label>
+        <Input value={customer} onChange={setCustomer} placeholder="例：田中 太郎、株式会社みらい（任意）" className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">メモ</label>
+        <Textarea value={notes} onChange={setNotes} rows={3} placeholder="連絡事項・補足など" />
+      </div>
+      {gcalUrl && <div className="pt-1">
+        <a href={gcalUrl} target="_blank" rel="noreferrer" className="text-[12px] text-accent-600 hover:underline inline-flex items-center gap-1">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          Googleカレンダーへ追加
+        </a>
+      </div>}
+    </div>
+  </Modal>;
+}
+
+function NewScheduleModal({ onClose }) {
+  const { dispatch, setMsg } = useApp();
+  const [presetId, setPresetId] = useState('car');
+  const preset = SCHEDULE_PRESETS.find(p => p.id===presetId);
+  const [name, setName] = useState(preset.name);
+  const [color, setColor] = useState(preset.color);
+  useEffect(() => { setName(preset.name); setColor(preset.color); }, [presetId]);
+  const submit = () => {
+    if (!name.trim()) return;
+    dispatch({ type:'ADD_SCHEDULE', name: name.trim(), color,
+      resourceLabel: preset.resourceLabel, bookingLabel: preset.bookingLabel,
+      resources: preset.sampleResources });
+    setMsg('タイムラインを作成しました');
+    onClose();
+  };
+  return <Modal open onClose={onClose} title="新しいタイムラインを作る" size="md"
+    footer={<><Btn variant="ghost" onClick={onClose}>キャンセル</Btn><Btn onClick={submit}>作成</Btn></>}>
+    <div className="space-y-4">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">テンプレート</label>
+        <div className="grid grid-cols-2 gap-2 mt-1.5">
+          {SCHEDULE_PRESETS.map(p => (
+            <button key={p.id} onClick={()=>setPresetId(p.id)}
+              className={`text-left p-3 rounded-md border transition ${presetId===p.id?'border-accent-500 bg-accent-50 dark:bg-accent-900/30':'border-ink-200 dark:border-ink-700 hover:border-accent-300'}`}>
+              <div className="flex items-center gap-2 text-[13px] font-medium">
+                <span className={`w-2 h-2 rounded-full bg-${p.color}-500`}></span>{p.name}
+              </div>
+              <div className="text-[11px] text-ink-500 mt-1">行：{p.resourceLabel} / バー：{p.bookingLabel}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">名前</label>
+        <Input value={name} onChange={setName} className="mt-1.5" />
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カラー</label>
+        <div className="mt-1.5"><ColorPicker value={color} onChange={setColor} options={PROJECT_COLORS} /></div>
+      </div>
+      {preset.sampleResources.length>0 && <div className="text-[11px] text-ink-500 bg-ink-50 dark:bg-ink-700/30 rounded p-2.5">
+        サンプルとして「{preset.sampleResources.join(' / ')}」を追加します。あとから編集できます。
+      </div>}
+    </div>
+  </Modal>;
+}
+
+function ScheduleSettingsModal({ onClose }) {
+  const { state, dispatch, setMsg } = useApp();
+  const sch = state.schedules.find(s => s.id===state.selectedScheduleId);
+  if (!sch) return null;
+  return <Modal open onClose={onClose} title="タイムラインの設定" size="md" footer={<Btn variant="ghost" onClick={onClose}>閉じる</Btn>}>
+    <div className="space-y-4">
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">名前</label>
+        <Input value={sch.name} onChange={v=>dispatch({type:'UPDATE_SCHEDULE',id:sch.id,patch:{name:v}})} className="mt-1.5" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">行（リソース）の呼び方</label>
+          <Input value={sch.resourceLabel} onChange={v=>dispatch({type:'UPDATE_SCHEDULE',id:sch.id,patch:{resourceLabel:v}})} className="mt-1.5" />
+        </div>
+        <div>
+          <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">バー（予定）の呼び方</label>
+          <Input value={sch.bookingLabel} onChange={v=>dispatch({type:'UPDATE_SCHEDULE',id:sch.id,patch:{bookingLabel:v}})} className="mt-1.5" />
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カラー</label>
+        <div className="mt-1.5"><ColorPicker value={sch.color} onChange={v=>dispatch({type:'UPDATE_SCHEDULE',id:sch.id,patch:{color:v}})} options={PROJECT_COLORS} /></div>
+      </div>
+      <div className="border-t border-ink-100 dark:border-ink-700/60 pt-3 space-y-2">
+        <Btn variant="outline" className="w-full justify-center" onClick={()=>{if(confirm('アーカイブしますか？')){dispatch({type:'ARCHIVE_SCHEDULE',id:sch.id}); dispatch({type:'SET_VIEW',view:'dashboard'}); onClose();}}}>アーカイブ</Btn>
+        <Btn variant="ghost" className="w-full justify-center text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" onClick={()=>{if(confirm('このタイムラインを完全に削除しますか？元に戻せません。')){dispatch({type:'DELETE_SCHEDULE',id:sch.id}); dispatch({type:'SET_VIEW',view:'dashboard'}); onClose();}}}>削除</Btn>
+      </div>
+    </div>
+  </Modal>;
+}
+
 function GanttEmpty({ filter, hasFilter }) {
   return <div className="flex-1 flex items-center justify-center bg-white dark:bg-ink-800">
     <div className="text-center text-ink-400 text-[13px]">
@@ -3236,6 +3837,7 @@ function App() {
         <GanttView projectId={state.selectedProjectId} />
       </div>;
       case 'project-settings': return <ProjectSettingsView />;
+      case 'schedule': return <ScheduleView />;
       case 'board':
       default:
         return <Board />;
@@ -3260,6 +3862,8 @@ function App() {
       {modalName==='import' && <ImportCSVModal onClose={()=>setModalName(null)} />}
       {modalName==='aiGenerate' && <AIGenerateModal onClose={()=>setModalName(null)} />}
       {modalName==='switchOrg' && <SwitchOrgModal onClose={()=>setModalName(null)} />}
+      {modalName==='newSchedule' && <NewScheduleModal onClose={()=>setModalName(null)} />}
+      {modalName==='scheduleSettings' && <ScheduleSettingsModal onClose={()=>setModalName(null)} />}
       <Toast msg={msg} />
     </AppCtx.Provider>
   );
