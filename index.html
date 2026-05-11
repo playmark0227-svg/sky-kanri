@@ -44,9 +44,7 @@
     font-family: 'Inter','Noto Sans JP','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
     font-feature-settings: "palt";
     -webkit-font-smoothing: antialiased;
-    color: #0f172a;
   }
-  .dark body { color: #e2e8f0; }
   button, input, textarea, select { font-family: inherit; }
   .scrollbar-thin::-webkit-scrollbar { width: 10px; height: 10px; }
   .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.32); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
@@ -67,6 +65,16 @@
   .dark .markdown pre { background: rgba(255,255,255,0.04); }
   .markdown a { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
   .markdown blockquote { border-left: 3px solid #cbd5e1; padding-left: 0.8rem; color: #64748b; margin: 0.4rem 0; }
+  .markdown-tight .markdown ul { padding-left: 1.1rem; margin: 0.25rem 0; }
+  .markdown-tight .markdown li { margin: 0.05rem 0; }
+  .markdown-tight .markdown p { margin: 0.2rem 0; }
+  @media print {
+    aside, .modal-backdrop { display: none !important; }
+    body { background: white !important; color: #0f172a !important; }
+    .scrollbar-thin { overflow: visible !important; }
+    .gantt-bar { box-shadow: none !important; }
+    @page { size: landscape; margin: 10mm; }
+  }
   .label-pill { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 500; line-height: 1.6; letter-spacing: 0.01em; }
   .toast { animation: slideIn 0.18s ease-out; }
   @keyframes slideIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -166,10 +174,82 @@ const isWithinDays = (s, n) => {
   const diff = daysBetween(today(), s);
   return diff >= 0 && diff <= n;
 };
+/* ===== Priority by date ===== */
+function priorityOf(task) {
+  if (task.status === 'completed' || task.status === 'cancelled') return null;
+  if (!task.dueDate) return null;
+  const diff = daysBetween(today(), task.dueDate);
+  if (diff < 0) return { id: 'overdue',  label:'期限切れ', short:`${-diff}日経過`, rank: 0, bg:'bg-rose-100 dark:bg-rose-900/40',  text:'text-rose-700 dark:text-rose-200',  bar:'bg-rose-500' };
+  if (diff === 0) return { id: 'today',  label:'今日',     short:'今日',          rank: 1, bg:'bg-rose-50 dark:bg-rose-900/30',   text:'text-rose-600 dark:text-rose-200',  bar:'bg-rose-400' };
+  if (diff === 1) return { id: 'tomorrow',label:'明日',    short:'明日',          rank: 2, bg:'bg-amber-50 dark:bg-amber-900/30', text:'text-amber-700 dark:text-amber-200',bar:'bg-amber-400' };
+  if (diff <= 7)  return { id: 'week',   label:'今週中',   short:`あと${diff}日`,  rank: 3, bg:'bg-amber-50/60 dark:bg-amber-900/15',text:'text-amber-700 dark:text-amber-300',bar:'bg-amber-300' };
+  if (diff <= 30) return { id: 'month',  label:'今月中',   short:`あと${diff}日`,  rank: 4, bg:'bg-ink-100 dark:bg-ink-700/40',     text:'text-ink-600 dark:text-ink-300',    bar:'bg-ink-300' };
+  return                     { id: 'later', label:'先',       short:`あと${diff}日`,  rank: 5, bg:'bg-ink-50 dark:bg-ink-700/30',      text:'text-ink-500 dark:text-ink-400',    bar:'bg-ink-200' };
+}
+function PriorityBadge({ task, compact }) {
+  const p = priorityOf(task);
+  if (!p) return null;
+  if (compact) return <span className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium num ${p.bg} ${p.text}`}>{p.short}</span>;
+  return <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded font-medium ${p.bg} ${p.text}`}>
+    <span className={`w-1.5 h-1.5 rounded-full ${p.bar}`}></span>{p.label}
+  </span>;
+}
+
 const labelById = (proj, id) => proj?.labels.find(l => l.id === id);
 const userById = (org, id) => org?.members.find(m => m.id === id);
 const colorObj = (id) => LABEL_COLORS.find(c => c.id === id) || LABEL_COLORS[9];
 const statusObj = (id) => STATUSES.find(s => s.id === id) || STATUSES[0];
+
+/* ===== Google Calendar / iCal ===== */
+function ymdCompact(s) { return s ? s.replace(/-/g,'') : ''; }
+function googleCalUrl(task, proj) {
+  if (!task.dueDate) return null;
+  const start = task.startDate || task.dueDate;
+  const endExcl = addDays(task.dueDate, 1); // Google Cal end is exclusive
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `[${proj?.name || ''}] ${task.title}`,
+    dates: `${ymdCompact(start)}/${ymdCompact(endExcl)}`,
+    details: (task.description || '') + `\n\n#${String(task.taskNumber).padStart(3,'0')} (sky-kanri)`,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+function icsEscape(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;'); }
+function buildICS(tasks, projects, orgName='sky-kanri') {
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    `PRODID:-//sky-kanri//${orgName}//JP`,
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+  ];
+  const now = new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/, '');
+  tasks.forEach(t => {
+    if (!t.dueDate) return;
+    const proj = projects.find(p => p.id===t.projectId);
+    const start = t.startDate || t.dueDate;
+    const endExcl = addDays(t.dueDate, 1);
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${t.id}@sky-kanri`,
+      `DTSTAMP:${now}`,
+      `DTSTART;VALUE=DATE:${ymdCompact(start)}`,
+      `DTEND;VALUE=DATE:${ymdCompact(endExcl)}`,
+      `SUMMARY:${icsEscape(`[${proj?.name||''}] ${t.title}`)}`,
+      `DESCRIPTION:${icsEscape((t.description||'') + `\n#${String(t.taskNumber).padStart(3,'0')}`)}`,
+      `STATUS:${t.status==='completed'?'CONFIRMED':t.status==='cancelled'?'CANCELLED':'TENTATIVE'}`,
+      'END:VEVENT',
+    );
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function downloadICS(filename, content) {
+  const blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* =========================================
  * Persistence
@@ -300,6 +380,10 @@ function seedData() {
     ],
     tasks: [
       // ABC商事
+      mkTask({ id:'tm1', projectId:projWeb, listId:'l_done', taskNumber:0, title:'公開リリース予定日',
+        description:'本番リリース予定。各タスクの締切はこの日に間に合わせる。',
+        assignees:['u_yamaguchi'], startDate: addDays(today(),21), dueDate: addDays(today(),21),
+        labels:[], order:99, milestone: true, status:'not_started' }),
       mkTask({ id:'t1', projectId:projWeb, listId:'l_back', taskNumber:1, title:'トップページのワイヤーを清書',
         description:'前回打ち合わせの議事メモをもとに、トップ・サービス・採用の3画面のワイヤーを清書する。\n\n- ヒアリング議事録: /docs/abc/2026-04-22.md\n- 参考: 同業他社A社、B社の構成',
         assignees:['u_nakajima'], startDate: today(), dueDate: addDays(today(),3),
@@ -316,11 +400,11 @@ function seedData() {
       mkTask({ id:'t2', projectId:projWeb, listId:'l_doing', taskNumber:2, title:'採用ページ用の社員インタビュー（中田部長）',
         description:'5/14(木) 14:00 - 本社3F会議室。質問項目はNotionに整理済み。',
         assignees:['u_kobayashi'], startDate: addDays(today(),-1), dueDate: addDays(today(),2),
-        labels:['lb_content'], order:0 }),
+        labels:['lb_content'], order:0, progress: 50 }),
       mkTask({ id:'t3', projectId:projWeb, listId:'l_doing', taskNumber:3, title:'お問い合わせフォーム（reCAPTCHA対応）',
         description:'バリデーション・送信完了後の遷移・スパム対策まで。',
         assignees:['u_partner'], startDate: today(), dueDate: addDays(today(),4),
-        labels:['lb_dev'], order:1,
+        labels:['lb_dev'], order:1, progress: 30, dependsOn: ['t1'],
         checklist:[
           { id:'c4', text:'入力バリデーション', done:true },
           { id:'c5', text:'reCAPTCHA v3 組み込み', done:false },
@@ -336,7 +420,7 @@ function seedData() {
       mkTask({ id:'t5', projectId:projWeb, listId:'l_done', taskNumber:5, title:'キックオフMTG 議事録',
         description:'共有済み。',
         assignees:['u_me'], startDate: addDays(today(),-12), dueDate: addDays(today(),-10),
-        labels:['lb_review'], order:0 }),
+        labels:['lb_review'], order:0, progress: 100, milestone: true, status:'completed' }),
       mkTask({ id:'t6', projectId:projWeb, listId:'l_back', taskNumber:6, title:'スマホ用 メニュー（ハンバーガー）の挙動検討',
         description:'A案：オーバーレイ / B案：ドロワー。次回のMTGで決定。',
         assignees:['u_nakajima'], startDate: addDays(today(),5), dueDate: addDays(today(),9),
@@ -373,7 +457,7 @@ function seedData() {
       mkTask({ id:'t13', projectId:projDev, listId:'d_done', taskNumber:13, title:'依存パッケージの更新（マイナーバージョン）',
         description:'CIは通過済み。',
         assignees:['u_kobayashi'], startDate: addDays(today(),-9), dueDate: addDays(today(),-7),
-        labels:['dlb_chore'], order:0 }),
+        labels:['dlb_chore'], order:0, status:'completed' }),
 
       // 採用
       mkTask({ id:'t14', projectId:projHr, listId:'h_1st', taskNumber:14, title:'山田さん 一次面談（5/15 16:00）',
@@ -416,6 +500,7 @@ function seedData() {
 function mkTask(o){ return Object.assign({
   description:'', assignees:[], startDate:null, dueDate:null, labels:[], checklist:[], comments:[],
   status:'not_started', followers:[], files:[], archived:false, createdAt: Date.now(), updatedAt: Date.now(), order: 0,
+  progress: 0, milestone: false, dependsOn: [],
 }, o); }
 
 /* =========================================
@@ -768,7 +853,7 @@ function Btn({ children, onClick, variant='primary', size='md', icon, className=
   };
   const sizes = { xs:'px-2 py-1 text-xs', sm:'px-3 py-1.5 text-sm', md:'px-3.5 py-1.5 text-sm', lg:'px-4 py-2 text-sm' };
   return <button type={type} disabled={disabled} onClick={onClick} title={title}
-    className={`inline-flex items-center gap-1.5 rounded-md font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-300 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
+    className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition focus:outline-none focus:ring-2 focus:ring-accent-300 disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]} ${sizes[size]} ${className}`}>
     {icon && <span className="opacity-80">{icon}</span>}{children}
   </button>;
 }
@@ -777,7 +862,7 @@ function Modal({ open, onClose, title, children, footer, size='md', closeOnBackd
   if (!open) return null;
   const sizeMap = { sm:'max-w-md', md:'max-w-2xl', lg:'max-w-4xl', xl:'max-w-6xl', full:'max-w-[95vw]' };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/40 backdrop-blur-sm modal-backdrop"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/60 backdrop-blur modal-backdrop"
          onClick={(e) => { if (closeOnBackdrop && e.target===e.currentTarget) onClose(); }}>
       <div className={`bg-white dark:bg-ink-800 rounded-xl shadow-pop w-full ${sizeMap[size]} max-h-[90vh] flex flex-col modal-content`}>
         {title !== null && <div className="flex items-center justify-between px-5 py-3 border-b border-ink-100 dark:border-ink-700/60">
@@ -849,11 +934,12 @@ function EmojiPicker({ value, onChange, options }) {
   ))}</div>;
 }
 
-function ColorPicker({ value, onChange, options }) {
-  return <div className="flex flex-wrap gap-1">{options.map(c => {
+function ColorPicker({ value, onChange, options, size='md' }) {
+  const dim = size==='sm' ? 'w-4 h-4' : 'w-5 h-5';
+  return <div className="inline-flex flex-wrap gap-1.5">{options.map(c => {
     const co = LABEL_COLORS.find(x => x.id===c) || colorObj(c);
     return <button key={c} type="button" onClick={()=>onChange(c)}
-      className={`w-7 h-7 rounded-full ${co.bg} ${value===c?'ring-2 ring-offset-2 ring-blue-500':''}`} title={c} />
+      className={`${dim} rounded-full ${co.bg} hover:scale-110 transition ${value===c?'ring-2 ring-offset-1 ring-ink-700 dark:ring-ink-200':''}`} title={c} />
   })}</div>;
 }
 
@@ -918,13 +1004,13 @@ function Sidebar() {
             const tasksCount = state.tasks.filter(t => t.projectId===p.id && !t.archived && t.status!=='completed').length;
             const active = state.selectedProjectId===p.id && (state.view==='board' || state.view==='gantt' || state.view==='project-settings');
             const dotColor = `bg-${p.color}-500`;
-            return <button key={p.id} onClick={()=>dispatch({ type:'SET_VIEW', view:'board', projectId:p.id })}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] ${active?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200':'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800/60'}`}>
+            return <button key={p.id} onClick={()=>dispatch({ type:'SET_VIEW', view:'board', projectId:p.id })} title={p.name}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] group ${active?'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200':'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800/60'}`}>
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`}></span>
               {!collapsed && <>
-                <span className="flex-1 text-left truncate">{p.name}</span>
-                {p.favorite && <span className="text-amber-500 text-xs">★</span>}
-                {tasksCount > 0 && <span className="text-[10px] text-ink-500 num">{tasksCount}</span>}
+                <span className="flex-1 text-left leading-snug break-words">{p.name}</span>
+                {p.favorite && <span className="text-amber-500 text-xs flex-shrink-0">★</span>}
+                {tasksCount > 0 && <span className="text-[10px] text-ink-500 num flex-shrink-0 tabular-nums">{tasksCount}</span>}
               </>}
             </button>;
           })}
@@ -1069,24 +1155,52 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
-          <Card title="今日のタスク" subtitle={`担当している未完了タスク`} action={<Btn size="xs" variant="ghost" onClick={()=>dispatch({type:'SET_VIEW',view:'all-tasks'})}>すべて見る →</Btn>}>
+          <Card title="今日のタスク" subtitle="締切が近い順に並べています" action={<Btn size="xs" variant="ghost" onClick={()=>dispatch({type:'SET_VIEW',view:'all-tasks'})}>すべて見る →</Btn>}>
             {myTasks.length === 0 && <Empty>未完了のタスクはありません。</Empty>}
-            <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
-              {[...overdue, ...dueSoon, ...myTasks.filter(t => !t.dueDate)].slice(0,12).map(t => (
-                <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />
-              ))}
-            </div>
+            {(() => {
+              const buckets = [
+                { id:'overdue',  label:'期限切れ', tone:'text-rose-600 dark:text-rose-300',  count: 0, items: [] },
+                { id:'today',    label:'今日',     tone:'text-rose-500 dark:text-rose-300',  count: 0, items: [] },
+                { id:'tomorrow', label:'明日',     tone:'text-amber-600 dark:text-amber-300',count: 0, items: [] },
+                { id:'week',     label:'今週中',   tone:'text-amber-700 dark:text-amber-300',count: 0, items: [] },
+                { id:'month',    label:'今月中',   tone:'text-ink-600 dark:text-ink-300',    count: 0, items: [] },
+                { id:'later',    label:'先',       tone:'text-ink-500 dark:text-ink-400',    count: 0, items: [] },
+                { id:'none',     label:'期日なし', tone:'text-ink-400 dark:text-ink-500',    count: 0, items: [] },
+              ];
+              myTasks.forEach(t => {
+                const p = priorityOf(t);
+                const id = !t.dueDate ? 'none' : (p?.id || 'later');
+                const b = buckets.find(x => x.id===id); if (b){ b.items.push(t); b.count++; }
+              });
+              buckets.forEach(b => b.items.sort((a,c)=>(a.dueDate||'9').localeCompare(c.dueDate||'9')));
+              const visible = buckets.filter(b => b.count > 0);
+              return <div className="space-y-3 max-h-[28rem] overflow-y-auto scrollbar-thin pr-1">
+                {visible.map(b => <div key={b.id}>
+                  <div className={`text-[10px] uppercase tracking-wider font-semibold mb-1 ${b.tone}`}>
+                    {b.label} <span className="text-ink-300 num ml-1">{b.count}</span>
+                  </div>
+                  <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
+                    {b.items.slice(0,6).map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />)}
+                  </div>
+                </div>)}
+              </div>;
+            })()}
           </Card>
 
           <Card title="自分宛のコメント" subtitle="メンションされた発言">
             {myMentions.length === 0 && <Empty>新しいメンションはありません。</Empty>}
-            <div className="space-y-3">
+            <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
               {myMentions.slice(0,6).map((m, i) => {
                 const u = userById(org, m.comment.userId);
-                return <button key={i} onClick={()=>openTask(m.task.id)} className="w-full text-left p-3 rounded-md hover:bg-ink-50 dark:hover:bg-ink-700/30 transition">
-                  <div className="flex items-center gap-2 text-[11px] text-ink-500"><Avatar user={u} size={20} />{u?.name}<span className="text-ink-300">·</span><span className="num">{fmtDateTime(m.comment.createdAt)}</span></div>
-                  <div className="text-[13px] mt-1.5 leading-relaxed">{m.comment.text}</div>
-                  <div className="text-[11px] text-accent-600 mt-1.5">› {m.task.title}</div>
+                const proj = state.projects.find(p => p.id===m.task.projectId);
+                return <button key={i} onClick={()=>openTask(m.task.id)} className="w-full text-left py-3 first:pt-1 last:pb-1 group">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-500"><Avatar user={u} size={20} /><span className="font-medium text-ink-700 dark:text-ink-200">{u?.name}</span><span className="text-ink-300">·</span><span className="num">{fmtDateTime(m.comment.createdAt)}</span></div>
+                  <div className="text-[13px] mt-1.5 leading-relaxed text-ink-800 dark:text-ink-100">{m.comment.text}</div>
+                  <div className="text-[11px] text-ink-500 mt-2 flex items-center gap-1.5 group-hover:text-accent-600 transition">
+                    <span className={`w-1.5 h-1.5 rounded-full bg-${proj?.color}-500`}></span>
+                    {m.task.title}
+                    <span className="ml-0.5 opacity-0 group-hover:opacity-100">→</span>
+                  </div>
                 </button>;
               })}
             </div>
@@ -1118,16 +1232,16 @@ function Dashboard() {
             <Btn size="xs" variant="ghost" onClick={()=>openModal('newAnnouncement')}>＋投稿</Btn> : null
           }>
             {org.announcements.length === 0 && <Empty>お知らせはありません。</Empty>}
-            <div className="space-y-3.5">
+            <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
               {org.announcements.map(a => {
                 const u = userById(org, a.createdBy);
-                return <div key={a.id} className="text-[13px] leading-relaxed border-l-2 border-ink-200 dark:border-ink-700 pl-3">
+                return <div key={a.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold">{a.title}</div>
+                    <div className="text-[13px] font-semibold tracking-tight">{a.title}</div>
                     {currentUser?.id===a.createdBy && <button onClick={()=>{if(confirm('削除しますか？')) dispatch({type:'DELETE_ANNOUNCEMENT',id:a.id});}} className="text-ink-400 hover:text-rose-600 text-[11px]">削除</button>}
                   </div>
-                  <div className="text-[11px] text-ink-400 mt-0.5">{u?.name}<span className="mx-1.5 text-ink-300">·</span><span className="num">{fmtDateTime(a.createdAt)}</span></div>
-                  <div className="mt-1.5 text-ink-700 dark:text-ink-300"><Markdown text={a.body} /></div>
+                  <div className="text-[11px] text-ink-400 mt-1">{u?.name}<span className="mx-1.5 text-ink-300">·</span><span className="num">{fmtDateTime(a.createdAt)}</span></div>
+                  <div className="mt-2 text-[12.5px] leading-relaxed text-ink-700 dark:text-ink-300 markdown-tight"><Markdown text={a.body} /></div>
                 </div>;
               })}
             </div>
@@ -1163,6 +1277,21 @@ function Empty({ children }) {
   return <p className="text-[13px] text-ink-400 py-4 text-center">{children}</p>;
 }
 
+function PageContainer({ title, subtitle, children, action, wide=false }) {
+  return <div className="flex-1 overflow-y-auto">
+    <div className={`px-8 pt-6 pb-4 ${wide?'':'max-w-5xl'}`}>
+      <div className="flex items-end justify-between mb-6">
+        <div>
+          <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
+          {subtitle && <p className="text-[12px] text-ink-400 mt-1">{subtitle}</p>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
 function Card({ title, subtitle, children, action }) {
   return <div className="bg-white dark:bg-ink-800 rounded-lg shadow-card hairline p-4">
     <div className="flex items-end justify-between mb-3">
@@ -1176,20 +1305,23 @@ function Card({ title, subtitle, children, action }) {
   </div>;
 }
 
-function TaskRow({ task, onClick, showProject }) {
+function TaskRow({ task, onClick, showProject, showPriority }) {
   const { state } = useApp();
   const proj = state.projects.find(p => p.id===task.projectId);
   const org = state.organizations.find(o => o.id===proj?.orgId);
+  const p = priorityOf(task);
   const overdue = task.dueDate && isPastDate(task.dueDate) && task.status !== 'completed';
   const dueToday = isTodayDate(task.dueDate) && task.status!=='completed';
   const dueTomorrow = isTomorrow(task.dueDate) && task.status!=='completed';
-  const dateColor = overdue ? 'text-rose-600 font-semibold' : dueToday ? 'text-rose-500' : dueTomorrow ? 'text-amber-600' : 'text-ink-500';
+  const dateColor = overdue ? 'text-rose-600 font-semibold' : dueToday ? 'text-rose-500' : dueTomorrow ? 'text-amber-600' : 'text-ink-500 dark:text-ink-400';
   return (
-    <button onClick={onClick} className="w-full text-left flex items-center gap-2.5 px-1.5 py-2 hover:bg-ink-50 dark:hover:bg-ink-700/30 rounded-md transition">
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusObj(task.status).dot}`}></span>
+    <button onClick={onClick} className="w-full text-left flex items-center gap-2.5 px-1.5 py-2 hover:bg-ink-50 dark:hover:bg-ink-700/30 rounded-md transition relative group">
+      {p && <span className={`absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full ${p.bar}`}></span>}
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusObj(task.status).dot} ml-1`}></span>
       {showProject && <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 bg-${proj?.color}-500`} title={proj?.name}></span>}
       <span className="text-[11px] text-ink-400 num w-10 flex-shrink-0">#{String(task.taskNumber).padStart(3,'0')}</span>
-      <span className="flex-1 truncate text-[13px]">{task.title}</span>
+      <span className="flex-1 truncate text-[13px] text-ink-800 dark:text-ink-100">{task.title}</span>
+      {showPriority && p && <PriorityBadge task={task} compact />}
       <div className="hidden sm:flex items-center gap-1.5">
         {task.labels.slice(0,2).map(lid => { const l = labelById(proj, lid); return l ? <LabelPill key={lid} label={l} /> : null; })}
       </div>
@@ -1300,8 +1432,8 @@ function Board() {
         </div>}
       </div>
 
-      <div className="flex-1 overflow-x-auto p-5 scrollbar-thin bg-ink-100/40 dark:bg-ink-900/40">
-        <div className="flex gap-3 min-w-max h-full">
+      <div className="flex-1 overflow-x-auto p-5 scrollbar-thin bg-ink-100/50 dark:bg-ink-900/40">
+        <div className="flex gap-3 h-full" style={{ width: 'max-content', minWidth: '100%' }}>
           {[...proj.lists].sort((a,b)=>a.order-b.order).map(list => (
             <BoardList key={list.id} list={list} project={proj}
               tasks={filteredTasks.filter(t => t.listId===list.id).sort((a,b)=>a.order-b.order)}
@@ -1555,9 +1687,10 @@ function TaskModal({ taskId, onClose }) {
                 <ChecklistItem key={c.id} item={c} task={task} org={org} />
               ))}
             </div>
-            <div className="flex gap-1 mt-2">
-              <Input value={newChecklistText} onChange={setNewChecklistText} placeholder="項目を追加" />
-              <Btn size="sm" onClick={()=>{ if(newChecklistText.trim()){dispatch({type:'ADD_CHECKLIST_ITEM',taskId:task.id,text:newChecklistText.trim()});setNewChecklistText('');} }}>追加</Btn>
+            <div className="flex gap-1.5 mt-2">
+              <Input value={newChecklistText} onChange={setNewChecklistText} placeholder={task.checklist.length===0 ? '最初の項目を追加（Enterで確定）' : '項目を追加'}
+                onKeyDown={(e)=>{ if(e.key==='Enter' && newChecklistText.trim()){ dispatch({type:'ADD_CHECKLIST_ITEM',taskId:task.id,text:newChecklistText.trim()}); setNewChecklistText(''); } }} />
+              <Btn size="sm" variant="outline" onClick={()=>{ if(newChecklistText.trim()){dispatch({type:'ADD_CHECKLIST_ITEM',taskId:task.id,text:newChecklistText.trim()});setNewChecklistText('');} }}>追加</Btn>
             </div>
           </div>
 
@@ -1565,8 +1698,9 @@ function TaskModal({ taskId, onClose }) {
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">コメント</h3>
-              <span className="text-[11px] text-ink-500 num">{task.comments.length}件</span>
+              {task.comments.length>0 && <span className="text-[11px] text-ink-500 num">{task.comments.length}件</span>}
             </div>
+            {task.comments.length === 0 && <p className="text-[12px] text-ink-400 mb-3">まだコメントはありません。下のフォームから投稿できます。</p>}
             <div className="space-y-3 mb-4">
               {sortedComments.map(c => {
                 const u = userById(org, c.userId);
@@ -1587,16 +1721,17 @@ function TaskModal({ taskId, onClose }) {
             <div className="flex gap-2.5">
               <Avatar user={currentUser} size={28} />
               <div className="flex-1">
-                <Textarea value={newComment} onChange={setNewComment} placeholder={`コメントを書く（${currentUser?.name?.split(' ')[0]}として投稿）`} rows={2} />
-                <div className="flex justify-between mt-1.5">
-                  <div className="flex gap-2.5 text-[11px]">
-                    <button onClick={()=>setNewComment(newComment+'@'+currentUser?.name+' ')} className="text-ink-500 hover:text-accent-600">@自分</button>
+                <Textarea value={newComment} onChange={setNewComment} placeholder="コメントを書く" rows={2} />
+                <div className="flex items-center justify-between mt-1.5">
+                  <div className="flex gap-2 text-[11px] text-ink-500">
+                    <button onClick={()=>setNewComment((newComment + (newComment&&!newComment.endsWith(' ')?' ':'') + '@'+currentUser?.name+' '))} className="px-1.5 py-0.5 rounded hover:bg-ink-100 dark:hover:bg-ink-700">@自分</button>
                     <button onClick={()=>{
                       const allMembers = proj.members.map(m => userById(org, m.userId)?.name).filter(Boolean);
-                      setNewComment(newComment + allMembers.map(n => '@'+n).join(' ') + ' ');
-                    }} className="text-ink-500 hover:text-accent-600">@チーム全員</button>
+                      setNewComment((newComment + (newComment&&!newComment.endsWith(' ')?' ':'') + allMembers.map(n => '@'+n).join(' ') + ' '));
+                    }} className="px-1.5 py-0.5 rounded hover:bg-ink-100 dark:hover:bg-ink-700">@チーム全員</button>
+                    <span className="text-ink-300 ml-1">マークダウン可</span>
                   </div>
-                  <Btn size="sm" onClick={()=>{ if(newComment.trim()){dispatch({type:'ADD_COMMENT',taskId:task.id,text:newComment.trim()});setNewComment('');setMsg('コメントを投稿しました');} }}>送信</Btn>
+                  <Btn size="sm" disabled={!newComment.trim()} onClick={()=>{ if(newComment.trim()){dispatch({type:'ADD_COMMENT',taskId:task.id,text:newComment.trim()});setNewComment('');setMsg('コメントを投稿しました');} }}>送信</Btn>
                 </div>
               </div>
             </div>
@@ -1614,6 +1749,7 @@ function TaskModal({ taskId, onClose }) {
               options={proj.lists.map(l=>({value:l.id,label:l.name}))} />
           </SideField>
           <SideField label="担当者">
+            {task.assignees.length === 0 && <p className="text-[12px] text-ink-400 mb-1.5">未割り当て</p>}
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               {task.assignees.map(uid => {
                 const u = userById(org,uid);
@@ -1642,8 +1778,45 @@ function TaskModal({ taskId, onClose }) {
               <input type="date" value={task.dueDate||''} onChange={e=>update({dueDate:e.target.value||null})}
                 className="px-2 py-1 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[12px] num" />
             </div>
+            <div className="mt-1.5 flex items-center justify-between text-[11px]">
+              <PriorityBadge task={task} />
+              {task.dueDate && (() => {
+                const url = googleCalUrl(task, proj);
+                return <a href={url} target="_blank" rel="noreferrer"
+                  className="text-accent-600 hover:underline inline-flex items-center gap-1">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                  Googleカレンダーへ追加
+                </a>;
+              })()}
+            </div>
+          </SideField>
+          <SideField label={`進捗 ${task.progress||0}%`}>
+            <input type="range" min="0" max="100" step="5" value={task.progress||0}
+              onChange={e=>update({progress: +e.target.value, status: +e.target.value===100 ? 'completed' : (+e.target.value>0 && task.status==='not_started' ? 'in_progress' : task.status)})}
+              className="w-full accent-accent-600" />
+          </SideField>
+          <SideField label="種別">
+            <label className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" checked={!!task.milestone} onChange={e=>update({milestone: e.target.checked})} className="accent-accent-600" />
+              マイルストーン（節目）として扱う
+            </label>
+          </SideField>
+          <SideField label="先行タスク（このタスクの開始前に完了させる）">
+            <div className="flex flex-wrap gap-1 mb-1">
+              {(task.dependsOn||[]).map(tid => {
+                const dt = state.tasks.find(x => x.id===tid);
+                if (!dt) return null;
+                return <span key={tid} className="inline-flex items-center gap-1 bg-ink-100 dark:bg-ink-700/50 rounded px-1.5 py-0.5 text-[11px]">
+                  #{String(dt.taskNumber).padStart(3,'0')} {dt.title.length>14?dt.title.slice(0,14)+'…':dt.title}
+                  <button onClick={()=>update({dependsOn: task.dependsOn.filter(x=>x!==tid)})} className="text-ink-400 hover:text-rose-500">×</button>
+                </span>;
+              })}
+            </div>
+            <Select value="" onChange={v=>{ if(v) update({dependsOn: [...(task.dependsOn||[]), v]}); }} className="w-full"
+              options={[{value:'',label:'＋ 先行タスクを追加'}, ...state.tasks.filter(x => x.id!==task.id && x.projectId===task.projectId && !task.dependsOn?.includes(x.id) && !x.archived).map(x => ({ value: x.id, label: `#${String(x.taskNumber).padStart(3,'0')} ${x.title}` }))]} />
           </SideField>
           <SideField label={`ラベル（${task.labels.length}/4）`}>
+            {task.labels.length === 0 && <p className="text-[12px] text-ink-400 mb-1.5">なし</p>}
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               {task.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} removable onRemove={()=>update({labels:task.labels.filter(x=>x!==lid)})} />)}
             </div>
@@ -1658,22 +1831,36 @@ function TaskModal({ taskId, onClose }) {
             </div>}
           </SideField>
           <SideField label={`添付ファイル（${task.files.length}）`}>
-            <div className="space-y-1">
-              {task.files.map((f,i) => <div key={i} className="flex items-center justify-between text-[12px] bg-ink-50 dark:bg-ink-700/40 rounded px-2 py-1">
-                <span className="truncate">{f.name}</span>
-                <button onClick={()=>update({files:task.files.filter((_,j)=>j!==i)})} className="text-ink-400 hover:text-rose-500 ml-2">×</button>
+            <div className="space-y-1.5">
+              {task.files.map((f,i) => <div key={i} className="flex items-center gap-2 text-[12px] bg-ink-50 dark:bg-ink-700/40 rounded px-2 py-1.5">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-ink-400 flex-shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                <span className="truncate flex-1">{f.name}</span>
+                <button onClick={()=>update({files:task.files.filter((_,j)=>j!==i)})} className="text-ink-400 hover:text-rose-500">×</button>
               </div>)}
-              <input type="file" multiple onChange={e=>{
-                const files = [...e.target.files].map(f => ({ name: f.name, size: f.size }));
-                update({files: [...task.files, ...files]});
-              }} className="text-[11px] text-ink-500 file:mr-2 file:px-2 file:py-1 file:rounded file:border-0 file:bg-ink-100 file:text-ink-700 dark:file:bg-ink-700 dark:file:text-ink-200 file:text-[11px]" />
-              <p className="text-[10px] text-ink-400">※ デモのためファイル名のみ保持されます</p>
+              <label className="block">
+                <input type="file" multiple onChange={e=>{
+                  const files = [...e.target.files].map(f => ({ name: f.name, size: f.size }));
+                  update({files: [...task.files, ...files]});
+                  e.target.value = '';
+                }} className="hidden" />
+                <span className="block text-center px-3 py-2 text-[12px] border border-dashed border-ink-300 dark:border-ink-600 text-ink-500 rounded-md cursor-pointer hover:border-accent-400 hover:text-accent-600 hover:bg-accent-50/40 dark:hover:bg-accent-900/10 transition">＋ ファイルを選択</span>
+              </label>
+              <p className="text-[10px] text-ink-400">デモ環境ではファイル名のみ保存されます。</p>
             </div>
           </SideField>
-          <div className="border-t border-ink-100 dark:border-ink-700/60 pt-3 space-y-1.5">
-            <Btn size="sm" variant="outline" className="w-full justify-center" onClick={()=>{dispatch({type:'DUPLICATE_TASK',id:task.id}); setMsg('タスクを複製しました'); onClose();}}>このタスクを複製</Btn>
-            <Btn size="sm" variant="outline" className="w-full justify-center" onClick={()=>{ if(confirm('このタスクをアーカイブしますか？')){dispatch({type:'ARCHIVE_TASK',id:task.id});onClose();} }}>アーカイブ</Btn>
-            <Btn size="sm" variant="danger" className="w-full justify-center" onClick={()=>{ if(confirm('このタスクを完全に削除します。元には戻せません。よろしいですか？')){dispatch({type:'DELETE_TASK',id:task.id});onClose();} }}>削除</Btn>
+          <div className="border-t border-ink-100 dark:border-ink-700/60 pt-3 space-y-1">
+            <Btn size="sm" variant="ghost" className="w-full justify-start" onClick={()=>{dispatch({type:'DUPLICATE_TASK',id:task.id}); setMsg('タスクを複製しました'); onClose();}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              このタスクを複製
+            </Btn>
+            <Btn size="sm" variant="ghost" className="w-full justify-start" onClick={()=>{ if(confirm('このタスクをアーカイブしますか？')){dispatch({type:'ARCHIVE_TASK',id:task.id});onClose();} }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+              アーカイブする
+            </Btn>
+            <Btn size="sm" variant="ghost" className="w-full justify-start text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20" onClick={()=>{ if(confirm('このタスクを完全に削除します。元には戻せません。よろしいですか？')){dispatch({type:'DELETE_TASK',id:task.id});onClose();} }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              削除する
+            </Btn>
           </div>
         </div>
       </div>
@@ -1723,21 +1910,45 @@ function ChecklistItem({ item, task, org }) {
  * Gantt Chart
  * ========================================= */
 function GanttView({ projectId, allProjects }) {
-  const { state, openTask } = useApp();
+  const { state, dispatch, openTask, setMsg } = useApp();
   const projects = allProjects ? state.projects.filter(p => !p.archived) : state.projects.filter(p => p.id===projectId);
   const org = state.organizations.find(o => o.id===state.currentOrgId);
 
-  const allTasks = state.tasks.filter(t => !t.archived && t.startDate && t.dueDate && projects.some(p => p.id===t.projectId));
+  const [zoom, setZoom] = useState('day'); // day | week | month
+  const [groupBy, setGroupBy] = useState(allProjects ? 'project' : 'list'); // project | list | assignee | none
+  const [filter, setFilter] = useState({ assignee:'', status:'', label:'', myOnly:false });
+  const [showDeps, setShowDeps] = useState(true);
+  const [scope, setScope] = useState('auto'); // auto | month | quarter | half
+  const containerRef = useRef(null);
+  const todayRef = useRef(null);
+  const [drag, setDrag] = useState(null);
 
-  if (allTasks.length === 0) return <div className="p-8 text-gray-500">期間が設定されたタスクがありません</div>;
+  const allTasks = state.tasks.filter(t => {
+    if (t.archived || !t.dueDate) return false;
+    if (!projects.some(p => p.id===t.projectId)) return false;
+    if (filter.assignee && !t.assignees.includes(filter.assignee)) return false;
+    if (filter.status && t.status !== filter.status) return false;
+    if (filter.label) { const proj = projects.find(p => p.id===t.projectId); if (!proj?.labels.find(l => l.id===filter.label)) return false; if (!t.labels.includes(filter.label)) return false; }
+    if (filter.myOnly && !t.assignees.includes(state.currentUserId)) return false;
+    return true;
+  });
 
-  const dates = allTasks.flatMap(t => [t.startDate, t.dueDate]).sort();
-  const minD = dates[0];
-  const maxD = dates[dates.length-1];
+  if (allTasks.length === 0) return <GanttEmpty filter={filter} hasFilter={!!(filter.assignee||filter.status||filter.label||filter.myOnly)} />;
+
+  const tasksWithRange = allTasks.map(t => ({ ...t, _start: t.startDate || t.dueDate }));
+  const dates = tasksWithRange.flatMap(t => [t._start, t.dueDate]).sort();
+  let minD = dates[0];
+  let maxD = dates[dates.length-1];
+  if (scope === 'month')   { minD = today().slice(0,8)+'01'; maxD = addDays(minD, 31); }
+  if (scope === 'quarter') { const m = new Date(today()); m.setDate(1); m.setMonth(m.getMonth()-1); minD = m.toISOString().split('T')[0]; maxD = addDays(minD, 92); }
+  if (scope === 'half')    { const m = new Date(today()); m.setDate(1); m.setMonth(m.getMonth()-1); minD = m.toISOString().split('T')[0]; maxD = addDays(minD, 184); }
+
   const startD = addDays(minD, -3);
   const endD = addDays(maxD, 3);
   const totalDays = daysBetween(startD, endD);
-  const dayWidth = 32;
+  const dayWidth = zoom==='day' ? 32 : zoom==='week' ? 14 : 5;
+  const colWidth = 280;
+  const rowHeight = 40;
 
   const isHoliday = (d) => {
     const dt = new Date(d);
@@ -1750,61 +1961,298 @@ function GanttView({ projectId, allProjects }) {
   const dayStrs = [];
   for (let i=0; i<=totalDays; i++) dayStrs.push(addDays(startD, i));
 
+  // Group date headers by month
+  const monthGroups = [];
+  dayStrs.forEach(d => {
+    const dt = new Date(d);
+    const key = `${dt.getFullYear()}-${dt.getMonth()+1}`;
+    const last = monthGroups[monthGroups.length-1];
+    if (last && last.key === key) last.count++;
+    else monthGroups.push({ key, label: `${dt.getFullYear()}年${dt.getMonth()+1}月`, count: 1 });
+  });
+
+  // Group tasks by selected groupBy
+  function groupKey(t) {
+    if (groupBy === 'project') return t.projectId;
+    if (groupBy === 'assignee') return t.assignees[0] || '__unassigned';
+    if (groupBy === 'list') {
+      const p = projects.find(x => x.id===t.projectId);
+      return `${t.projectId}::${p?.lists.find(l => l.id===t.listId)?.id || ''}`;
+    }
+    return 'all';
+  }
+  const groupsMap = {};
+  tasksWithRange.forEach(t => {
+    const k = groupKey(t);
+    if (!groupsMap[k]) groupsMap[k] = { key: k, items: [] };
+    groupsMap[k].items.push(t);
+  });
+  const groups = Object.values(groupsMap).map(g => {
+    let label = '', accent = 'bg-ink-400', meta = '';
+    if (groupBy === 'project')  { const p = projects.find(p => p.id===g.key); label = p?.name||''; accent = `bg-${p?.color}-500`; }
+    else if (groupBy === 'assignee') {
+      if (g.key === '__unassigned') label = '未割り当て';
+      else { const u = userById(org, g.key); label = u?.name||''; }
+    }
+    else if (groupBy === 'list') {
+      const [pid, lid] = g.key.split('::');
+      const p = projects.find(p => p.id===pid);
+      const l = p?.lists.find(l => l.id===lid);
+      label = `${p?.name||''} › ${l?.name||''}`;
+      accent = `bg-${p?.color}-500`;
+    } else label = 'すべて';
+    g.items.sort((a,b) => (a._start||'').localeCompare(b._start||''));
+    return { ...g, label, accent };
+  }).sort((a,b) => a.label.localeCompare(b.label, 'ja'));
+
+  // Build row index for dependency arrow drawing
+  const rowIdx = new Map();
+  let cursor = 0;
+  groups.forEach(g => { cursor++; g.items.forEach(t => { rowIdx.set(t.id, cursor++); }); });
+
+  const jumpToToday = () => {
+    if (!containerRef.current) return;
+    const off = daysBetween(startD, today())*dayWidth - 200;
+    containerRef.current.scrollTo({ left: Math.max(0, off), behavior:'smooth' });
+  };
+
+  // Drag handlers (resize start/due)
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e) => {
+      const dx = e.clientX - drag.startX;
+      const days = Math.round(dx / dayWidth);
+      if (days === drag.lastDays) return;
+      setDrag({ ...drag, lastDays: days });
+    };
+    const onUp = () => {
+      const t = state.tasks.find(x => x.id===drag.taskId);
+      if (t) {
+        const days = drag.lastDays || 0;
+        const patch = {};
+        if (drag.edge === 'start' || drag.edge === 'move') patch.startDate = addDays(t.startDate || t.dueDate, days);
+        if (drag.edge === 'end' || drag.edge === 'move')   patch.dueDate   = addDays(t.dueDate, days);
+        if (patch.startDate && patch.dueDate && patch.startDate > patch.dueDate) {
+          // swap to keep order
+          const a = patch.startDate; patch.startDate = patch.dueDate; patch.dueDate = a;
+        }
+        if (Object.keys(patch).length) {
+          dispatch({ type:'UPDATE_TASK', id: drag.taskId, patch });
+          setMsg('期間を更新しました');
+        }
+      }
+      setDrag(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, [drag, dayWidth]);
+
+  const startDrag = (e, taskId, edge) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDrag({ taskId, edge, startX: e.clientX, lastDays: 0 });
+  };
+  const dragOffsetPx = drag ? drag.lastDays * dayWidth : 0;
+
+  const exportCSV = () => {
+    const rows = [['番号','プロジェクト','タスク','担当','開始','締切','状態','進捗','マイルストーン']];
+    tasksWithRange.forEach(t => {
+      const proj = projects.find(p => p.id===t.projectId);
+      rows.push([t.taskNumber, proj?.name||'', t.title, t.assignees.map(u => userById(org,u)?.name).join(','),
+        t._start||'', t.dueDate||'', statusObj(t.status).label, (t.progress||0)+'%', t.milestone?'はい':'']);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `gantt_${today()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+  const exportICS = () => {
+    const ics = buildICS(tasksWithRange, state.projects, org?.name);
+    downloadICS(`gantt_${today()}.ics`, ics);
+    setMsg(`${tasksWithRange.length}件のタスクを .ics で書き出しました`);
+  };
+
   return (
-    <div className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
-      <div style={{ minWidth: (totalDays+1)*dayWidth + 240 }}>
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-ink-800 border-b border-ink-200 dark:border-ink-700/60 flex shadow-sm">
-          <div className="w-60 px-3 py-2 border-r border-ink-200 dark:border-ink-700/60 text-[11px] uppercase tracking-wider text-ink-400 font-semibold">タスク</div>
-          <div className="flex">
-            {dayStrs.map(d => {
-              const dt = new Date(d);
-              const holiday = isHoliday(d);
-              const todayCl = d===today() ? 'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200 font-semibold' : '';
-              const dayColor = dt.getDay()===0 ? 'text-rose-500' : dt.getDay()===6 ? 'text-sky-500' : 'text-ink-400';
-              return <div key={d} className={`text-center text-[10px] border-r border-ink-100 dark:border-ink-700/40 num py-1 ${holiday&&!todayCl?'bg-rose-50/60 dark:bg-rose-900/15':''} ${todayCl}`} style={{ width: dayWidth }}>
-                <div>{dt.getMonth()+1}/{dt.getDate()}</div>
-                <div className={dayColor}>{'日月火水木金土'[dt.getDay()]}</div>
-              </div>;
-            })}
-          </div>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Toolbar */}
+      <div className="px-4 py-2 border-b border-ink-200 dark:border-ink-700/60 bg-ink-50/70 dark:bg-ink-800/60 flex items-center gap-2 flex-wrap text-sm">
+        <div className="inline-flex bg-white dark:bg-ink-700/40 rounded-md p-0.5 hairline">
+          {[['day','日'],['week','週'],['month','月']].map(([k,l]) => (
+            <button key={k} onClick={()=>setZoom(k)} className={`px-2.5 py-1 text-[12px] rounded ${zoom===k?'bg-accent-600 text-white':'text-ink-600 hover:text-ink-900 dark:text-ink-300'}`}>{l}</button>
+          ))}
         </div>
-        {/* Rows */}
-        {projects.map(proj => {
-          const projTasks = allTasks.filter(t => t.projectId===proj.id).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-          if (projTasks.length === 0) return null;
-          return <Fragment key={proj.id}>
-            <div className="bg-ink-50 dark:bg-ink-900/40 border-b border-ink-100 dark:border-ink-700/60 px-3 py-1.5 text-[12px] font-semibold flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full bg-${proj.color}-500`}></span>{proj.name}
+        <Select value={scope} onChange={setScope} options={[
+          {value:'auto',   label:'期間：データに合わせる'},
+          {value:'month',  label:'期間：今月'},
+          {value:'quarter',label:'期間：3ヶ月'},
+          {value:'half',   label:'期間：6ヶ月'},
+        ]} />
+        <Select value={groupBy} onChange={setGroupBy} options={[
+          {value:'project',  label:'グループ：プロジェクト'},
+          {value:'list',     label:'グループ：リスト'},
+          {value:'assignee', label:'グループ：担当者'},
+          {value:'none',     label:'グループ：なし'},
+        ]} />
+        <Select value={filter.assignee} onChange={v=>setFilter({...filter,assignee:v})} options={[
+          {value:'', label:'担当：すべて'},
+          ...org.members.map(m=>({value:m.id,label:m.name}))
+        ]} />
+        <Select value={filter.status} onChange={v=>setFilter({...filter,status:v})} options={[
+          {value:'', label:'状態：すべて'},
+          ...STATUSES.map(s=>({value:s.id,label:s.label}))
+        ]} />
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-600 dark:text-ink-300"><input type="checkbox" checked={filter.myOnly} onChange={e=>setFilter({...filter,myOnly:e.target.checked})} className="accent-accent-600" /> 自分のタスクのみ</label>
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-600 dark:text-ink-300"><input type="checkbox" checked={showDeps} onChange={e=>setShowDeps(e.target.checked)} className="accent-accent-600" /> 先行関係を表示</label>
+        <div className="ml-auto flex items-center gap-2">
+          <Btn size="sm" variant="ghost" onClick={jumpToToday}>今日へ</Btn>
+          <Btn size="sm" variant="ghost" onClick={exportCSV}>CSV</Btn>
+          <Btn size="sm" variant="ghost" onClick={exportICS}>.ics</Btn>
+          <Btn size="sm" variant="ghost" onClick={()=>window.print()}>印刷</Btn>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div ref={containerRef} className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
+        <div className="relative" style={{ minWidth: (totalDays+1)*dayWidth + colWidth }}>
+          {/* Header (2 rows) */}
+          <div className="sticky top-0 z-20 bg-white dark:bg-ink-800 border-b border-ink-200 dark:border-ink-700/60 shadow-sm">
+            <div className="flex">
+              <div className="px-3 py-1.5 border-r border-ink-200 dark:border-ink-700/60 text-[11px] uppercase tracking-wider text-ink-400 font-semibold flex items-center" style={{ width: colWidth }}>タスク</div>
+              <div className="flex">
+                {monthGroups.map((m,i) => (
+                  <div key={i} className="text-center text-[11px] text-ink-500 py-1 border-r border-ink-200 dark:border-ink-700/60 font-medium num"
+                    style={{ width: m.count*dayWidth }}>{m.label}</div>
+                ))}
+              </div>
             </div>
-            {projTasks.map(t => {
-              const startOff = daysBetween(startD, t.startDate);
-              const dur = daysBetween(t.startDate, t.dueDate) + 1;
+            <div className="flex border-t border-ink-100 dark:border-ink-700/40">
+              <div className="border-r border-ink-200 dark:border-ink-700/60" style={{ width: colWidth }}></div>
+              <div className="flex">
+                {dayStrs.map(d => {
+                  const dt = new Date(d);
+                  const holiday = isHoliday(d);
+                  const todayCl = d===today() ? 'bg-accent-50 dark:bg-accent-900/30 text-accent-700 dark:text-accent-200 font-semibold' : '';
+                  const dayColor = dt.getDay()===0 ? 'text-rose-500' : dt.getDay()===6 ? 'text-sky-500' : 'text-ink-500';
+                  if (zoom==='month' && dt.getDate() !== 1) {
+                    return <div key={d} className={`border-r border-ink-100/60 dark:border-ink-700/30 ${holiday?'bg-rose-50/40 dark:bg-rose-900/10':''} ${todayCl}`} style={{ width: dayWidth }} />;
+                  }
+                  return <div key={d} className={`text-center text-[10px] border-r border-ink-100 dark:border-ink-700/40 num py-1 ${holiday&&!todayCl?'bg-rose-50/60 dark:bg-rose-900/15':''} ${todayCl}`} style={{ width: dayWidth }}>
+                    <div>{dt.getDate()}</div>
+                    {zoom!=='month' && <div className={dayColor}>{'日月火水木金土'[dt.getDay()]}</div>}
+                  </div>;
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Today line */}
+          <div ref={todayRef} className="absolute top-0 bottom-0 w-px bg-accent-500/60 z-10 pointer-events-none"
+            style={{ left: colWidth + daysBetween(startD, today())*dayWidth + dayWidth/2 }}>
+            <div className="absolute -top-0.5 -translate-x-1/2 px-1 py-0.5 text-[9px] bg-accent-600 text-white rounded">今日</div>
+          </div>
+
+          {/* Rows */}
+          {groups.map(g => <Fragment key={g.key}>
+            <div className="bg-ink-50 dark:bg-ink-900/30 border-b border-ink-100 dark:border-ink-700/60 px-4 py-2 text-[12px] font-semibold flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${g.accent}`}></span>{g.label}
+              <span className="text-[10px] text-ink-400 num font-normal ml-1">{g.items.length}件</span>
+            </div>
+            {g.items.map(t => {
+              const proj = projects.find(p => p.id===t.projectId);
+              const startOff = daysBetween(startD, t._start);
+              const dur = daysBetween(t._start, t.dueDate) + 1;
               const overdue = isPastDate(t.dueDate) && t.status!=='completed';
               const sObj = statusObj(t.status);
-              return <div key={t.id} className="flex border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50/60 dark:hover:bg-ink-700/20">
-                <div className="w-60 px-3 py-2 border-r border-ink-100 dark:border-ink-700/40 text-[13px] truncate">
-                  <button onClick={()=>openTask(t.id)} className="text-left hover:text-accent-600 truncate w-full">
-                    <span className="text-[10px] text-ink-400 mr-1.5 num">#{String(t.taskNumber).padStart(3,'0')}</span>{t.title}
-                  </button>
+              const isDragTarget = drag && drag.taskId===t.id;
+              const xOff = isDragTarget && (drag.edge==='move' || drag.edge==='start') ? dragOffsetPx : 0;
+              const wAdj = isDragTarget ? (drag.edge==='end' ? dragOffsetPx : drag.edge==='start' ? -dragOffsetPx : 0) : 0;
+              const barLeft = startOff*dayWidth + 3 + xOff;
+              const barWidth = Math.max(dur*dayWidth - 6 + wAdj, 12);
+              const orgLocal = state.organizations.find(o => o.id===proj?.orgId);
+              return <div key={t.id} className="flex border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50/40 dark:hover:bg-ink-700/15 group" data-tid={t.id}>
+                <div className="px-3 py-2 border-r border-ink-100 dark:border-ink-700/40 text-[13px] flex items-center gap-2 sticky left-0 bg-white dark:bg-ink-800 z-10" style={{ width: colWidth, height: rowHeight }}>
+                  <span className="text-[10px] text-ink-400 num flex-shrink-0">#{String(t.taskNumber).padStart(3,'0')}</span>
+                  {t.milestone && <span className="text-amber-500 flex-shrink-0" title="マイルストーン">◆</span>}
+                  <button onClick={()=>openTask(t.id)} className="text-left hover:text-accent-600 truncate flex-1 leading-tight text-ink-800 dark:text-ink-100">{t.title}</button>
+                  <div className="flex -space-x-1.5 flex-shrink-0">
+                    {t.assignees.slice(0,2).map(uid => <Avatar key={uid} user={userById(orgLocal,uid)} size={18} ring />)}
+                  </div>
                 </div>
-                <div className="relative flex" style={{ width: (totalDays+1)*dayWidth }}>
+                <div className="relative flex" style={{ width: (totalDays+1)*dayWidth, height: rowHeight }}>
                   {dayStrs.map(d => (
-                    <div key={d} className={`border-r border-ink-100 dark:border-ink-700/40 ${isHoliday(d)?'bg-rose-50/40 dark:bg-rose-900/10':''} ${d===today()?'bg-accent-50/60 dark:bg-accent-900/15':''}`} style={{ width: dayWidth, height: 32 }} />
+                    <div key={d} className={`border-r border-ink-100/60 dark:border-ink-700/30 ${isHoliday(d)?'bg-rose-50/40 dark:bg-rose-900/10':''} ${d===today()?'bg-accent-50/40 dark:bg-accent-900/10':''}`} style={{ width: dayWidth }} />
                   ))}
-                  <button onClick={()=>openTask(t.id)} title={`${t.title}（${t.startDate}〜${t.dueDate}）`}
-                    className={`gantt-bar absolute top-1.5 h-5 rounded ${sObj.color} text-white text-[11px] px-2 flex items-center overflow-hidden ${overdue?'ring-1 ring-rose-600 ring-offset-1':''}`}
-                    style={{ left: startOff*dayWidth+2, width: dur*dayWidth-4 }}>
-                    <span className="truncate">{t.title}</span>
-                  </button>
+                  {t.milestone ? (
+                    <button onClick={()=>openTask(t.id)} title={`${t.title}（${fmtDate(t.dueDate)}）`}
+                      className="absolute z-10" style={{ left: barLeft + barWidth/2 - 10, top: rowHeight/2 - 10 }}>
+                      <span className="block w-5 h-5 bg-amber-500 rotate-45 rounded-sm shadow-sm border border-white dark:border-ink-800"></span>
+                    </button>
+                  ) : (
+                    <div className="absolute" style={{ left: barLeft, top: 8, width: barWidth, height: rowHeight - 16 }}>
+                      <button onMouseDown={(e)=>startDrag(e, t.id, 'move')} onClick={(e)=>{ if(!drag) openTask(t.id); }} title={`${t.title}（${fmtDate(t._start)} 〜 ${fmtDate(t.dueDate)}）`}
+                        className={`gantt-bar relative w-full h-full rounded-md ${sObj.color} text-white text-[11px] flex items-center overflow-hidden font-medium shadow-sm cursor-grab active:cursor-grabbing ${overdue?'ring-2 ring-rose-500/70 ring-offset-1 dark:ring-offset-ink-800':''}`}>
+                        {/* progress */}
+                        {(t.progress||0) > 0 && t.status!=='completed' && (
+                          <span className="absolute inset-y-0 left-0 bg-white/30" style={{ width: `${t.progress}%` }}></span>
+                        )}
+                        <span className="relative px-2 truncate">{t.title}</span>
+                      </button>
+                      {/* edge handles */}
+                      <span onMouseDown={(e)=>startDrag(e, t.id, 'start')} className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-black/20" title="開始日を変更"></span>
+                      <span onMouseDown={(e)=>startDrag(e, t.id, 'end')}   className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize bg-transparent hover:bg-black/20" title="締切日を変更"></span>
+                    </div>
+                  )}
                 </div>
               </div>;
             })}
-          </Fragment>;
-        })}
+          </Fragment>)}
+
+          {/* Dependency arrows (svg overlay) */}
+          {showDeps && <DependencyArrows tasksWithRange={tasksWithRange} rowIdx={rowIdx} startD={startD} dayWidth={dayWidth} colWidth={colWidth} rowHeight={rowHeight} headerH={56} />}
+        </div>
       </div>
     </div>
   );
+}
+
+function GanttEmpty({ filter, hasFilter }) {
+  return <div className="flex-1 flex items-center justify-center bg-white dark:bg-ink-800">
+    <div className="text-center text-ink-400 text-[13px]">
+      {hasFilter ? 'フィルタの条件に合うタスクがありません' : '期日が設定されたタスクがまだありません'}
+    </div>
+  </div>;
+}
+
+function DependencyArrows({ tasksWithRange, rowIdx, startD, dayWidth, colWidth, rowHeight, headerH }) {
+  const arrows = [];
+  tasksWithRange.forEach(t => {
+    (t.dependsOn||[]).forEach(srcId => {
+      const src = tasksWithRange.find(x => x.id===srcId);
+      if (!src) return;
+      const srcRow = rowIdx.get(src.id); const dstRow = rowIdx.get(t.id);
+      if (srcRow == null || dstRow == null) return;
+      const x1 = colWidth + (daysBetween(startD, src.dueDate)+1)*dayWidth;
+      const y1 = headerH + (srcRow-1)*rowHeight + rowHeight/2 + rowHeight; // approximate group row offsets cause minor inaccuracy
+      const x2 = colWidth + daysBetween(startD, t._start)*dayWidth + 3;
+      const y2 = headerH + (dstRow-1)*rowHeight + rowHeight/2 + rowHeight;
+      arrows.push({ x1, y1, x2, y2, key: src.id+'-'+t.id });
+    });
+  });
+  if (arrows.length === 0) return null;
+  return <svg className="absolute top-0 left-0 pointer-events-none z-[5]" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+    <defs>
+      <marker id="arrowhead-dep" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="#94a3b8" />
+      </marker>
+    </defs>
+    {arrows.map(a => {
+      const midX = Math.max(a.x1 + 8, a.x2 - 8);
+      const d = `M ${a.x1} ${a.y1} L ${a.x1+8} ${a.y1} L ${midX} ${a.y2} L ${a.x2} ${a.y2}`;
+      return <path key={a.key} d={d} stroke="#94a3b8" strokeWidth="1.2" fill="none" strokeDasharray="3 3" markerEnd="url(#arrowhead-dep)" />;
+    })}
+  </svg>;
 }
 
 /* =========================================
@@ -1813,7 +2261,7 @@ function GanttView({ projectId, allProjects }) {
 function AllTasksView() {
   const { state, openTask } = useApp();
   const [filter, setFilter] = useState({ assignee:'', status:'', period:'all', followingOnly:false, hasDate:'all', projectId:'' });
-  const [sort, setSort] = useState({ key:'dueDate', dir:'asc' });
+  const [sort, setSort] = useState({ key:'priority', dir:'asc' });
 
   let tasks = state.tasks.filter(t => !t.archived);
   if (filter.projectId) tasks = tasks.filter(t => t.projectId===filter.projectId);
@@ -1827,6 +2275,16 @@ function AllTasksView() {
   if (filter.period==='week') tasks = tasks.filter(t => isWithinDays(t.dueDate, 7));
   if (filter.period==='month') tasks = tasks.filter(t => isWithinDays(t.dueDate, 30));
   tasks.sort((a,b) => {
+    if (sort.key === 'priority') {
+      const pa = priorityOf(a)?.rank ?? 99;
+      const pb = priorityOf(b)?.rank ?? 99;
+      const diff = (pa - pb) * (sort.dir==='asc' ? 1 : -1);
+      if (diff !== 0) return diff;
+      // tie-break by due date
+      const av = a.dueDate || '9999-99-99';
+      const bv = b.dueDate || '9999-99-99';
+      return (av < bv ? -1 : av > bv ? 1 : 0);
+    }
     let av = a[sort.key]||'', bv = b[sort.key]||'';
     if (sort.key==='projectId') { av = state.projects.find(p=>p.id===av)?.name||''; bv = state.projects.find(p=>p.id===bv)?.name||''; }
     return (av < bv ? -1 : av > bv ? 1 : 0) * (sort.dir==='asc' ? 1 : -1);
@@ -1893,35 +2351,38 @@ function AllTasksView() {
       </div>
       <div className="flex-1 overflow-auto scrollbar-thin bg-white dark:bg-ink-800">
         <table className="w-full text-[13px]">
-          <thead className="bg-ink-50 dark:bg-ink-900/40 sticky top-0 text-[11px] uppercase tracking-wider text-ink-500">
+          <thead className="bg-white/95 dark:bg-ink-800/95 backdrop-blur-sm sticky top-0 text-[11px] uppercase tracking-wider text-ink-500 z-10 shadow-[0_1px_0_rgba(15,23,42,0.06)]">
             <tr>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 num font-semibold w-16" onClick={()=>setS('taskNumber')}>#</th>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('projectId')}>プロジェクト</th>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('title')}>タイトル</th>
-              <th className="text-left px-3 py-2 font-semibold">担当</th>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('status')}>状態</th>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold num" onClick={()=>setS('startDate')}>開始</th>
-              <th className="text-left px-3 py-2 cursor-pointer hover:text-ink-800 font-semibold num" onClick={()=>setS('dueDate')}>締切</th>
-              <th className="text-left px-3 py-2 font-semibold">ラベル</th>
+              <th className="text-left px-3 py-2.5 cursor-pointer hover:text-ink-800 font-semibold w-24" onClick={()=>setS('priority')}>優先度</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 num font-semibold w-16" onClick={()=>setS('taskNumber')}>#</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('projectId')}>プロジェクト</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('title')}>タイトル</th>
+              <th className="text-left px-4 py-2.5 font-semibold">担当</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 font-semibold" onClick={()=>setS('status')}>状態</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 font-semibold num w-28" onClick={()=>setS('startDate')}>開始</th>
+              <th className="text-left px-4 py-2.5 cursor-pointer hover:text-ink-800 font-semibold num w-28" onClick={()=>setS('dueDate')}>締切</th>
+              <th className="text-left px-4 py-2.5 font-semibold">ラベル</th>
             </tr>
           </thead>
           <tbody>
-            {tasks.map(t => {
+            {tasks.length === 0 && <tr><td colSpan={9} className="text-center text-ink-400 py-12 text-[13px]">条件に合うタスクはありません</td></tr>}
+            {tasks.map((t, idx) => {
               const proj = state.projects.find(p=>p.id===t.projectId);
               const org = state.organizations.find(o=>o.id===proj?.orgId);
               const overdue = t.dueDate && isPastDate(t.dueDate) && t.status!=='completed';
               const dueToday = isTodayDate(t.dueDate) && t.status!=='completed';
               const dueTomorrow = isTomorrow(t.dueDate) && t.status!=='completed';
-              const dateColor = overdue?'text-rose-600 font-semibold':dueToday?'text-rose-500':dueTomorrow?'text-amber-600':'';
-              return <tr key={t.id} onClick={()=>openTask(t.id)} className="border-b border-ink-100 dark:border-ink-700/40 hover:bg-ink-50 dark:hover:bg-ink-700/30 cursor-pointer">
-                <td className="px-3 py-2 text-ink-400 num">{String(t.taskNumber).padStart(3,'0')}</td>
-                <td className="px-3 py-2"><span className={`inline-block w-1.5 h-1.5 rounded-full bg-${proj?.color}-500 mr-1.5`}></span>{proj?.name}</td>
-                <td className="px-3 py-2">{t.followers.includes(state.currentUserId)&&<span className="text-amber-500 mr-1">★</span>}{t.title}</td>
-                <td className="px-3 py-2"><div className="flex -space-x-1.5">{t.assignees.map(u=><Avatar key={u} user={userById(org,u)} size={20} ring />)}</div></td>
-                <td className="px-3 py-2"><StatusPill status={t.status} /></td>
-                <td className="px-3 py-2 text-[11px] num text-ink-500">{fmtDate(t.startDate)}</td>
-                <td className={`px-3 py-2 text-[11px] num ${dateColor}`}>{fmtDate(t.dueDate)}</td>
-                <td className="px-3 py-2"><div className="flex flex-wrap gap-1">{t.labels.map(lid => <LabelPill key={lid} label={labelById(proj,lid)} />)}</div></td>
+              const dateColor = overdue?'text-rose-600 font-semibold':dueToday?'text-rose-500':dueTomorrow?'text-amber-600':'text-ink-500 dark:text-ink-400';
+              return <tr key={t.id} onClick={()=>openTask(t.id)} className={`border-b border-ink-100 dark:border-ink-700/40 hover:bg-accent-50/40 dark:hover:bg-accent-900/10 cursor-pointer transition-colors ${idx%2===1?'bg-ink-50/40 dark:bg-ink-900/20':''}`}>
+                <td className="px-3 py-2.5"><PriorityBadge task={t} compact /></td>
+                <td className="px-4 py-2.5 text-ink-400 num">{String(t.taskNumber).padStart(3,'0')}</td>
+                <td className="px-4 py-2.5"><span className="inline-flex items-center gap-1.5"><span className={`inline-block w-1.5 h-1.5 rounded-full bg-${proj?.color}-500`}></span>{proj?.name}</span></td>
+                <td className="px-4 py-2.5">{t.milestone&&<span className="text-amber-500 mr-1" title="マイルストーン">◆</span>}{t.followers.includes(state.currentUserId)&&<span className="text-amber-500 mr-1">★</span>}{t.title}</td>
+                <td className="px-4 py-2.5"><div className="flex -space-x-1.5">{t.assignees.map(u=><Avatar key={u} user={userById(org,u)} size={20} ring />)}</div></td>
+                <td className="px-4 py-2.5"><StatusPill status={t.status} /></td>
+                <td className="px-4 py-2.5 text-[11px] num text-ink-500">{fmtDate(t.startDate)}</td>
+                <td className={`px-4 py-2.5 text-[11px] num ${dateColor}`}>{fmtDate(t.dueDate)}</td>
+                <td className="px-4 py-2.5"><div className="flex flex-wrap gap-1">{t.labels.slice(0,3).map(lid => <LabelPill key={lid} label={labelById(proj,lid)} />)}</div></td>
               </tr>;
             })}
           </tbody>
@@ -1947,15 +2408,14 @@ function SearchView() {
     ));
   }, [q, state.tasks]);
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <h1 className="text-[20px] font-semibold tracking-tight mb-5">検索</h1>
-      <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="キーワードを入力（タスク名・説明・コメント）"
+    <PageContainer title="検索" subtitle="タスクの本文・コメントを横断して検索します。">
+      <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="キーワードを入力"
         className="w-full px-4 py-2.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-800 text-[15px] focus:outline-none focus:ring-2 focus:ring-accent-300 focus:border-accent-400" />
       <p className="text-[12px] text-ink-400 mt-2 num">{q ? `${matches.length} 件ヒットしました` : '上の入力欄にキーワードを入力してください'}</p>
       <div className="mt-4 bg-white dark:bg-ink-800 rounded-md hairline divide-y divide-ink-100 dark:divide-ink-700/50">
-        {matches.map(t => <TaskRow key={t.id} task={t} onClick={()=>openTask(t.id)} showProject />)}
+        {matches.map(t => <div key={t.id} className="px-3"><TaskRow task={t} onClick={()=>openTask(t.id)} showProject /></div>)}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -1967,11 +2427,8 @@ function ArchiveView() {
   const archivedProjects = state.projects.filter(p => p.archived);
   const archivedTasks = state.tasks.filter(t => t.archived);
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-[20px] font-semibold tracking-tight">アーカイブ</h1>
-        <p className="text-[12px] text-ink-400 mt-0.5">非表示にしたプロジェクトとタスクの一覧。復元または完全削除ができます。</p>
-      </div>
+    <PageContainer title="アーカイブ" subtitle="非表示にしたプロジェクトとタスクの一覧。復元または完全削除ができます。">
+    <div className="space-y-6">
       <Card title="プロジェクト" subtitle={`${archivedProjects.length} 件`}>
         {archivedProjects.length === 0 && <Empty>アーカイブされたプロジェクトはありません。</Empty>}
         <div className="divide-y divide-ink-100 dark:divide-ink-700/50">
@@ -2004,6 +2461,7 @@ function ArchiveView() {
         </div>
       </Card>
     </div>
+    </PageContainer>
   );
 }
 
@@ -2248,20 +2706,23 @@ function ProjLabels({ proj }) {
       <h2 className="font-semibold">ラベル</h2>
       <p className="text-[11px] text-ink-400 mt-0.5">{proj.labels.length}/50 件</p>
     </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+    <div className="space-y-1.5">
       {proj.labels.map(l => (
-        <div key={l.id} className="flex items-center gap-2 p-2 bg-white dark:bg-ink-800 rounded-md hairline">
-          <span className={`w-2.5 h-2.5 rounded-full ${colorObj(l.color).bg}`}></span>
-          <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{name:v}})} />
-          <ColorPicker value={l.color} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{color:v}})} options={LABEL_COLORS.map(c=>c.id)} />
-          <button onClick={()=>{if(confirm('ラベルを削除しますか？タスクからも外れます。'))dispatch({type:'DELETE_LABEL',projectId:proj.id,labelId:l.id});}} className="text-ink-400 hover:text-rose-500 px-1 text-[11px]">削除</button>
+        <div key={l.id} className="group flex items-center gap-3 p-2.5 bg-white dark:bg-ink-800 rounded-md hairline">
+          <LabelPill label={l} />
+          <Input value={l.name} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{name:v}})} className="max-w-xs" />
+          <ColorPicker size="sm" value={l.color} onChange={v=>dispatch({type:'UPDATE_LABEL',projectId:proj.id,labelId:l.id,patch:{color:v}})} options={LABEL_COLORS.map(c=>c.id)} />
+          <button onClick={()=>{if(confirm('ラベルを削除しますか？タスクからも外れます。'))dispatch({type:'DELETE_LABEL',projectId:proj.id,labelId:l.id});}} className="ml-auto text-ink-400 hover:text-rose-500 text-[11px] opacity-0 group-hover:opacity-100">削除</button>
         </div>
       ))}
     </div>
-    {proj.labels.length < 50 && <div className="p-4 hairline rounded-md bg-white dark:bg-ink-800 space-y-2 max-w-md">
+    {proj.labels.length < 50 && <div className="p-4 hairline rounded-md bg-white dark:bg-ink-800 space-y-2.5 max-w-md">
       <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">新しいラベルを追加</h3>
       <Input value={name} onChange={setName} placeholder="ラベル名（例：至急、デザイン）" />
-      <ColorPicker value={color} onChange={setColor} options={LABEL_COLORS.map(c=>c.id)} />
+      <div className="flex items-center gap-3">
+        <span className="text-[11px] text-ink-400">色：</span>
+        <ColorPicker size="sm" value={color} onChange={setColor} options={LABEL_COLORS.map(c=>c.id)} />
+      </div>
       <Btn size="sm" onClick={()=>{if(name.trim()){dispatch({type:'ADD_LABEL',projectId:proj.id,name:name.trim(),color}); setName('');}}}>追加</Btn>
     </div>}
   </div>;
@@ -2290,8 +2751,15 @@ function ProjLists({ proj }) {
 }
 
 function ProjGeneral({ proj }) {
-  const { dispatch, setMsg } = useApp();
-  return <div className="space-y-5 max-w-md">
+  const { state, dispatch, setMsg } = useApp();
+  const exportICS = () => {
+    const projTasks = state.tasks.filter(t => t.projectId===proj.id && !t.archived && t.dueDate);
+    if (projTasks.length===0){ setMsg('期日のあるタスクがありません'); return; }
+    const ics = buildICS(projTasks, state.projects, state.organizations.find(o=>o.id===proj.orgId)?.name);
+    downloadICS(`${proj.name}.ics`, ics);
+    setMsg(`${projTasks.length}件のタスクを ${proj.name}.ics として出力しました`);
+  };
+  return <div className="space-y-6 max-w-md">
     <div>
       <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">プロジェクト名</label>
       <Input value={proj.name} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{name:v}})} className="mt-1.5" />
@@ -2299,6 +2767,11 @@ function ProjGeneral({ proj }) {
     <div>
       <label className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カラー</label>
       <div className="mt-1.5"><ColorPicker value={proj.color} onChange={v=>dispatch({type:'UPDATE_PROJECT',id:proj.id,patch:{color:v}})} options={PROJECT_COLORS} /></div>
+    </div>
+    <div className="border-t border-ink-100 dark:border-ink-700/60 pt-4 space-y-2">
+      <h3 className="text-[11px] uppercase tracking-wider text-ink-400 font-semibold">カレンダー連携</h3>
+      <p className="text-[12px] text-ink-500">.ics ファイルとして書き出すと、Googleカレンダー / Apple カレンダー / Outlook に取り込めます。</p>
+      <Btn variant="outline" className="w-full justify-center" onClick={exportICS}>このプロジェクトを .ics で書き出し</Btn>
     </div>
     <div className="border-t border-ink-100 dark:border-ink-700/60 pt-4 space-y-2">
       <Btn variant="outline" className="w-full justify-center" onClick={()=>{dispatch({type:'DUPLICATE_PROJECT',id:proj.id}); setMsg('プロジェクトを複製しました');}}>このプロジェクトを複製</Btn>
@@ -2314,12 +2787,8 @@ function AutomationView() {
   const { state, dispatch, setMsg } = useApp();
   const [whName, setWhName] = useState(''); const [whUrl, setWhUrl] = useState('');
   const [keyName, setKeyName] = useState('');
-  return <div className="p-8 max-w-4xl mx-auto space-y-6">
-    <div>
-      <h1 className="text-[20px] font-semibold tracking-tight">連携 / API</h1>
-      <p className="text-[12px] text-ink-400 mt-0.5">Slack や Microsoft Teams への通知、外部システムからの自動操作を設定します。</p>
-    </div>
-
+  return <PageContainer title="連携 / API" subtitle="Slack や Microsoft Teams への通知、外部システムからの自動操作を設定します。">
+    <div className="space-y-6">
     <Card title="Webhook" subtitle="タスクの変化を外部URLに通知します">
       <div className="space-y-1.5">
         {state.automation.webhooks.map(w => (
@@ -2370,14 +2839,15 @@ function AutomationView() {
     <Card title="エンドポイント一覧" subtitle="REST API（デモ環境では未稼働）">
       <div className="space-y-1.5 text-[12px] font-mono">
         <Endpoint method="GET"    color="emerald" path="/v1/tasks"       desc="タスク一覧を取得" />
-        <Endpoint method="POST"   color="accent"  path="/v1/tasks"       desc="新しいタスクを作成" />
+        <Endpoint method="POST"   color="indigo"  path="/v1/tasks"       desc="新しいタスクを作成" />
         <Endpoint method="PATCH"  color="amber"   path="/v1/tasks/:id"   desc="タスクを更新" />
         <Endpoint method="DELETE" color="rose"    path="/v1/tasks/:id"   desc="タスクを削除" />
         <Endpoint method="GET"    color="emerald" path="/v1/projects"    desc="プロジェクト一覧" />
-        <Endpoint method="POST"   color="accent"  path="/v1/comments"    desc="コメントを投稿" />
+        <Endpoint method="POST"   color="indigo"  path="/v1/comments"    desc="コメントを投稿" />
       </div>
     </Card>
-  </div>;
+    </div>
+  </PageContainer>;
 }
 
 function Endpoint({ method, color, path, desc }) {
@@ -2426,12 +2896,8 @@ function AIView() {
     setDiagnosis({ summary: lines.join(' '), feedback: fb });
   };
 
-  return <div className="p-8 max-w-4xl mx-auto space-y-6">
-    <div>
-      <h1 className="text-[20px] font-semibold tracking-tight">アシスタント</h1>
-      <p className="text-[12px] text-ink-400 mt-0.5">タスクの自動生成や、いまの進捗の振り返りを手助けします。</p>
-    </div>
-
+  return <PageContainer title="アシスタント" subtitle="タスクの自動生成や、いまの進捗の振り返りを手助けします。">
+    <div className="space-y-6">
     <Card title="タスクの下書きを作る" subtitle="プロジェクトの目的を入れると、それらしいタスクを自動で並べます">
       <Select value={target} onChange={setTarget} options={state.projects.filter(p=>!p.archived).map(p=>({value:p.id,label:p.name}))} className="mb-2 w-full" />
       <Textarea value={prompt} onChange={setPrompt} placeholder="例：ABC商事のサービスサイトをリニューアルする" rows={3} />
@@ -2465,7 +2931,8 @@ function AIView() {
         </div>
       </div>}
     </Card>
-  </div>;
+    </div>
+  </PageContainer>;
 }
 
 /* =========================================
@@ -2474,17 +2941,13 @@ function AIView() {
 function HistoryView() {
   const { state, openTask } = useApp();
   const org = state.organizations.find(o => o.id===state.currentOrgId);
-  return <div className="p-8 max-w-4xl mx-auto">
-    <div className="mb-5">
-      <h1 className="text-[20px] font-semibold tracking-tight">行動履歴</h1>
-      <p className="text-[12px] text-ink-400 mt-0.5">タスクの作成・移動、コメント投稿などの操作ログ</p>
-    </div>
+  return <PageContainer title="行動履歴" subtitle="タスクの作成・移動、コメント投稿などの操作ログ">
     <div className="bg-white dark:bg-ink-800 rounded-md hairline divide-y divide-ink-100 dark:divide-ink-700/50">
       {state.history.length === 0 && <Empty>履歴はまだありません。</Empty>}
       {state.history.slice(0,200).map(h => {
         const u = userById(org, h.userId);
         const proj = state.projects.find(p => p.id===h.projectId);
-        return <div key={h.id} className="p-3.5 flex items-start gap-2.5">
+        return <div key={h.id} className="px-4 py-3 flex items-start gap-2.5 hover:bg-ink-50/60 dark:hover:bg-ink-700/20">
           <Avatar user={u} size={28} />
           <div className="flex-1 min-w-0">
             <div className="text-[13px] leading-relaxed">
@@ -2498,7 +2961,7 @@ function HistoryView() {
         </div>;
       })}
     </div>
-  </div>;
+  </PageContainer>;
 }
 
 /* =========================================
